@@ -40,6 +40,18 @@ interface Toast {
   type: "success" | "error" | "info";
 }
 
+interface ResumeProfile {
+  name: string;
+  currentRole: string;
+  targetTitle: string;
+  yearsExperience: number;
+  skills: string[];
+  education: string;
+  summary: string;
+  preferredLocations: string[];
+  industries: string[];
+}
+
 /* ──────────────────────────── Defaults ──────────────────────────── */
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -94,6 +106,20 @@ function incrementSearchCount(): number {
   const next = loadSearchCount() + 1;
   localStorage.setItem("jobhunt_search_count", String(next));
   return next;
+}
+
+function loadResumeProfile(): ResumeProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("jobhunt_resume_profile");
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return null;
+}
+
+function saveResumeProfile(profile: ResumeProfile) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("jobhunt_resume_profile", JSON.stringify(profile));
 }
 
 /* ──────────────────────── Tag Input Component ──────────────────── */
@@ -210,6 +236,13 @@ export default function Dashboard() {
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const toastId = useRef(0);
 
+  /* ── Resume state ── */
+  const [resumeProfile, setResumeProfile] = useState<ResumeProfile | null>(null);
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   /* ── Toast helper ── */
   const showToast = useCallback((message: string, type: Toast["type"] = "success") => {
     const id = ++toastId.current;
@@ -217,13 +250,18 @@ export default function Dashboard() {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   }, []);
 
-  /* ── Load preferences + search count from localStorage ── */
+  /* ── Load preferences + search count + resume from localStorage ── */
   useEffect(() => {
     const loaded = loadPreferences();
     setPrefs(loaded);
     setSearchQuery(loaded.targetTitle);
     setSearchLocation(loaded.locations[0] || "Remote");
     setSearchCount(loadSearchCount());
+    const savedResume = loadResumeProfile();
+    if (savedResume) {
+      setResumeProfile(savedResume);
+      setResumeFileName(localStorage.getItem("jobhunt_resume_filename") || "resume.pdf");
+    }
     setPrefsLoaded(true);
   }, []);
 
@@ -248,6 +286,12 @@ export default function Dashboard() {
         query,
         location,
         user_id: "00000000-0000-0000-0000-000000000000",
+        user_profile: {
+          title: prefs.targetTitle,
+          skills: prefs.mustHaveSkills,
+          experience_years: prefs.yearsExperience,
+          salary_expectation_min: prefs.minSalary
+        }
       }),
     })
       .then((res) => res.json())
@@ -278,6 +322,71 @@ export default function Dashboard() {
     setPrefs((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  /* ── Resume upload handler ── */
+  const handleResumeUpload = useCallback(async (file: File) => {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      showToast("Please upload a PDF file", "error");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showToast("File too large. Max 10MB.", "error");
+      return;
+    }
+
+    setIsUploadingResume(true);
+    setResumeFileName(file.name);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/resume/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Upload failed");
+      }
+
+      const profile = data.profile as ResumeProfile;
+      setResumeProfile(profile);
+      saveResumeProfile(profile);
+      localStorage.setItem("jobhunt_resume_filename", file.name);
+
+      // Auto-fill preferences from resume
+      setPrefs((prev) => ({
+        ...prev,
+        targetTitle: profile.targetTitle || prev.targetTitle,
+        currentRole: profile.currentRole || prev.currentRole,
+        yearsExperience: profile.yearsExperience || prev.yearsExperience,
+        mustHaveSkills: profile.skills?.length > 0 ? profile.skills.slice(0, 10) : prev.mustHaveSkills,
+        locations: profile.preferredLocations?.length > 0 ? profile.preferredLocations : prev.locations,
+        industries: profile.industries?.length > 0 ? profile.industries : prev.industries,
+      }));
+      setSearchQuery(profile.targetTitle || searchQuery);
+
+      showToast(
+        `Resume parsed! Found ${profile.skills?.length || 0} skills via ${data.method === "gemini" ? "Gemini AI" : "keyword scan"}`,
+        "success"
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      showToast(message, "error");
+      setResumeFileName(null);
+    } finally {
+      setIsUploadingResume(false);
+    }
+  }, [showToast, searchQuery]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleResumeUpload(file);
+  }, [handleResumeUpload]);
+
   /* ── Derived data ── */
   const filteredJobs = jobs.filter((j) => j.matchScore >= filterMin);
   const avgScore = jobs.length ? Math.round(jobs.reduce((a, j) => a + j.matchScore, 0) / jobs.length) : 0;
@@ -292,12 +401,9 @@ export default function Dashboard() {
 
   /* ════════════════════════════ RENDER ══════════════════════════ */
   return (
-    <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-50 via-white to-blue-50/40 dark:from-slate-950 dark:via-black dark:to-slate-950 font-[family-name:var(--font-geist-sans)] selection:bg-blue-500/20">
-      {/* ── Noise texture ── */}
-      <div className="fixed inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iLjc1IiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbHRlcj0idXJsKCNhKSIgb3BhY2l0eT0iLjAzIi8+PC9zdmc+')] opacity-50 pointer-events-none" />
-
-      {/* ── Grid pattern ── */}
-      <div className="fixed inset-0 bg-[linear-gradient(rgba(0,0,0,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.015)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none" />
+    <main className="min-h-screen bg-[#f5f5f0] dark:bg-[#0a0a0a] font-[family-name:var(--font-geist-sans)] selection:bg-blue-500/20">
+      {/* ── Subtle warm noise texture ── */}
+      <div className="fixed inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iLjc1IiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbHRlcj0idXJsKCNhKSIgb3BhY2l0eT0iLjAzIi8+PC9zdmc+')] opacity-30 pointer-events-none" />
 
       {/* ── Toast notifications ── */}
       <div className="fixed top-6 right-6 z-50 flex flex-col gap-3">
@@ -526,6 +632,109 @@ export default function Dashboard() {
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">Agent Preferences</h2>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Configure how the AI agent searches and evaluates job matches.</p>
+            </div>
+
+            {/* ── Resume Upload Section ── */}
+            <div className="mb-6">
+              <SectionCard
+                icon={<svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+                title="Resume Upload"
+              >
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Upload your resume to auto-fill your profile and get AI-matched job recommendations.</p>
+
+                {/* Drop zone */}
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`relative cursor-pointer border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${
+                    isDragging
+                      ? "border-blue-500 bg-blue-50/50 dark:bg-blue-500/10 scale-[1.01]"
+                      : resumeProfile
+                      ? "border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-500/5 hover:border-emerald-400"
+                      : "border-slate-200 dark:border-slate-700 bg-white/40 dark:bg-slate-800/30 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-white/60 dark:hover:bg-slate-800/50"
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleResumeUpload(file);
+                      e.target.value = "";
+                    }}
+                  />
+
+                  {isUploadingResume ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <svg className="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                      <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">Analyzing resume with AI...</p>
+                    </div>
+                  ) : resumeProfile ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-white">{resumeFileName}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Parsed as {resumeProfile.targetTitle} · {resumeProfile.skills?.length || 0} skills detected</p>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">Click or drag to replace</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Drop your resume here or click to browse</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">PDF files only · Max 10MB</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Resume profile summary */}
+                {resumeProfile && (
+                  <div className="mt-4 bg-white/60 dark:bg-slate-800/40 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-white">{resumeProfile.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{resumeProfile.currentRole} · {resumeProfile.yearsExperience}+ years</p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setResumeProfile(null);
+                          setResumeFileName(null);
+                          localStorage.removeItem("jobhunt_resume_profile");
+                          localStorage.removeItem("jobhunt_resume_filename");
+                          showToast("Resume removed", "info");
+                        }}
+                        className="text-xs font-semibold text-red-500 hover:text-red-600 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    {resumeProfile.summary && (
+                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-3">{resumeProfile.summary}</p>
+                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {resumeProfile.skills?.slice(0, 12).map((skill) => (
+                        <span key={skill} className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300 border border-blue-100 dark:border-blue-500/20">
+                          {skill}
+                        </span>
+                      ))}
+                      {(resumeProfile.skills?.length || 0) > 12 && (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold text-slate-400">+{resumeProfile.skills.length - 12} more</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </SectionCard>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

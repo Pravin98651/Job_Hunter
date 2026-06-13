@@ -14,6 +14,7 @@ class AgentState(TypedDict):
     location: str
     raw_listings: List[JobListingCreate]
     scored_listings: List[dict]
+    user_profile: dict
 
 async def scrape_jobs(state: AgentState):
     print(f"Scraping jobs for {state['query']} in {state['location']}...")
@@ -23,7 +24,7 @@ async def scrape_jobs(state: AgentState):
 async def score_jobs(state: AgentState):
     print(f"Scoring {len(state.get('raw_listings', []))} listings...")
     
-    user_profile = {
+    user_profile = state.get("user_profile") or {
         "title": "AI Engineer",
         "skills": ["Python", "FastAPI", "React", "Postgres", "LLMs"],
         "experience_years": 3,

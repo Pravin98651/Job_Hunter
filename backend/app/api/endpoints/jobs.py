@@ -13,6 +13,7 @@ class JobSearchRequest(BaseModel):
     query: str
     location: str
     user_id: str
+    user_profile: dict | None = None
 
 @router.get("/", response_model=List[dict])
 def get_scored_jobs(db: Session = Depends(get_db), skip: int = 0, limit: int = 50):
@@ -45,6 +46,7 @@ async def trigger_job_search(request: JobSearchRequest):
         "user_id": request.user_id,
         "query": request.query,
         "location": request.location,
+        "user_profile": request.user_profile,
         "raw_listings": [],
         "scored_listings": []
     }
