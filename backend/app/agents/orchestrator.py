@@ -17,7 +17,7 @@ class AgentState(TypedDict):
 
 async def scrape_jobs(state: AgentState):
     print(f"Scraping jobs for {state['query']} in {state['location']}...")
-    jobs = await scrape_linkedin_jobs(state["query"], state["location"], max_results=3)
+    jobs = await scrape_linkedin_jobs(state["query"], state["location"], max_results=10)
     return {"raw_listings": jobs}
 
 async def score_jobs(state: AgentState):
