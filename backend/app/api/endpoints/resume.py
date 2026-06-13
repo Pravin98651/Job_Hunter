@@ -2,10 +2,12 @@ import os
 import json
 import re
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from pydantic import BaseModel
 from PyPDF2 import PdfReader
 import io
 
 from app.core.config import settings
+from app.agents.resume_optimizer import optimize_resume_for_job
 
 router = APIRouter()
 
@@ -162,3 +164,20 @@ async def upload_resume(file: UploadFile = File(...)):
         "textLength": len(resume_text),
         "method": "gemini" if _client else "keyword",
     }
+
+
+class OptimizeRequest(BaseModel):
+    resume_profile: dict
+    job_description: str
+
+@router.post("/optimize")
+async def optimize_resume(request: OptimizeRequest):
+    """
+    Optimizes a resume against a job description, highlighting ATS keywords 
+    and suggesting bullet point rewrites.
+    """
+    if not request.job_description:
+        raise HTTPException(status_code=400, detail="Job description is required")
+        
+    result = optimize_resume_for_job(request.resume_profile, request.job_description)
+    return result

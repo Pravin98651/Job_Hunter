@@ -3,6 +3,9 @@ from langgraph.graph import StateGraph, END
 from typing import TypedDict, List
 from app.schemas.jobs import JobListingCreate
 from app.scrapers.linkedin import scrape_linkedin_jobs
+from app.scrapers.indeed import scrape_indeed_jobs
+from app.scrapers.glassdoor import scrape_glassdoor_jobs
+from app.scrapers.wellfound import scrape_wellfound_jobs
 from app.agents.llm_scorer import score_job_listing
 from app.db.session import SessionLocal
 from app.models.job import JobListing, JobScore
@@ -17,9 +20,27 @@ class AgentState(TypedDict):
     user_profile: dict
 
 async def scrape_jobs(state: AgentState):
-    print(f"Scraping jobs for {state['query']} in {state['location']}...")
-    jobs = await scrape_linkedin_jobs(state["query"], state["location"], max_results=10)
-    return {"raw_listings": jobs}
+    print(f"Scraping jobs for {state['query']} in {state['location']} from multiple sources...")
+    
+    # Run scrapers concurrently. Set max_results per source to keep the total reasonable.
+    max_per_source = 5
+    results = await asyncio.gather(
+        scrape_linkedin_jobs(state["query"], state["location"], max_results=max_per_source),
+        scrape_indeed_jobs(state["query"], state["location"], max_results=max_per_source),
+        scrape_glassdoor_jobs(state["query"], state["location"], max_results=max_per_source),
+        scrape_wellfound_jobs(state["query"], state["location"], max_results=max_per_source),
+        return_exceptions=True
+    )
+    
+    all_jobs = []
+    for r in results:
+        if isinstance(r, list):
+            all_jobs.extend(r)
+        elif isinstance(r, Exception):
+            print(f"A scraper failed: {r}")
+            
+    print(f"Aggregated {len(all_jobs)} total jobs across all platforms.")
+    return {"raw_listings": all_jobs}
 
 async def score_jobs(state: AgentState):
     print(f"Scoring {len(state.get('raw_listings', []))} listings...")

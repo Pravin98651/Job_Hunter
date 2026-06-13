@@ -52,6 +52,19 @@ interface ResumeProfile {
   industries: string[];
 }
 
+interface RewriteSuggestion {
+  original_concept: string;
+  suggested_bullet: string;
+  reasoning: string;
+}
+
+interface OptimizationResult {
+  missing_keywords: string[];
+  matched_keywords: string[];
+  tailored_summary: string;
+  bullet_suggestions: RewriteSuggestion[];
+}
+
 /* ──────────────────────────── Defaults ──────────────────────────── */
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -243,6 +256,11 @@ export default function Dashboard() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  /* ── Optimization state ── */
+  const [optimizationJob, setOptimizationJob] = useState<Job | null>(null);
+  const [optimizationData, setOptimizationData] = useState<OptimizationResult | null>(null);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+
   /* ── Toast helper ── */
   const showToast = useCallback((message: string, type: Toast["type"] = "success") => {
     const id = ++toastId.current;
@@ -386,6 +404,38 @@ export default function Dashboard() {
     const file = e.dataTransfer.files[0];
     if (file) handleResumeUpload(file);
   }, [handleResumeUpload]);
+
+  /* ── Optimize Handler ── */
+  const handleOptimize = useCallback(async (job: Job) => {
+    if (!resumeProfile) {
+      showToast("Please upload a resume first in Preferences.", "error");
+      return;
+    }
+    setOptimizationJob(job);
+    setOptimizationData(null);
+    setIsOptimizing(true);
+    
+    try {
+      const res = await fetch("/api/resume/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resume_profile: resumeProfile,
+          job_description: `Role: ${job.title} at ${job.company}\nDescription: ${job.matchReason}` // Ideally we'd send full description, but using reason for now to save bandwidth if full desc isn't in frontend
+        }),
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Optimization failed");
+      
+      setOptimizationData(data);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Optimization failed", "error");
+      setOptimizationJob(null);
+    } finally {
+      setIsOptimizing(false);
+    }
+  }, [resumeProfile, showToast]);
 
   /* ── Derived data ── */
   const filteredJobs = jobs.filter((j) => j.matchScore >= filterMin);
@@ -618,7 +668,7 @@ export default function Dashboard() {
               <div className="flex flex-col gap-6">
                 {filteredJobs.map((job, idx) => (
                   <div key={job.id || idx} className="animate-[fadeUp_0.4s_ease-out]" style={{ animationDelay: `${idx * 60}ms`, animationFillMode: "backwards" }}>
-                    <JobCard {...job} />
+                    <JobCard {...job} onOptimize={() => handleOptimize(job)} />
                   </div>
                 ))}
               </div>
@@ -996,6 +1046,113 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* ══════════════════════ OPTIMIZATION MODAL ══════════════════════ */}
+      {(optimizationJob || isOptimizing) && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => !isOptimizing && setOptimizationJob(null)}></div>
+          <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-[fadeUp_0.3s_ease-out]">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  Resume Optimization
+                </h3>
+                {optimizationJob && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    Tailoring your resume for <strong className="text-slate-700 dark:text-slate-300">{optimizationJob.title}</strong> at {optimizationJob.company}
+                  </p>
+                )}
+              </div>
+              <button 
+                onClick={() => setOptimizationJob(null)}
+                disabled={isOptimizing}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6 bg-[#fcfcfc] dark:bg-[#0a0a0a]">
+              {isOptimizing ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full border-4 border-slate-100 dark:border-slate-800"></div>
+                    <div className="w-16 h-16 rounded-full border-4 border-blue-500 border-t-transparent animate-spin absolute top-0 left-0"></div>
+                  </div>
+                  <h4 className="mt-6 text-lg font-bold text-slate-800 dark:text-white">Analyzing ATS Match...</h4>
+                  <p className="text-sm text-slate-500 mt-2 text-center max-w-sm">Our AI is rewriting your bullet points and extracting missing keywords specifically for this role.</p>
+                </div>
+              ) : optimizationData ? (
+                <div className="space-y-8">
+                  {/* Keywords Row */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-rose-100 dark:border-rose-900/30">
+                      <h4 className="text-sm font-bold uppercase tracking-wider text-rose-500 flex items-center gap-2 mb-4">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                        Missing Keywords
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {optimizationData.missing_keywords.length > 0 ? optimizationData.missing_keywords.map((kw, i) => (
+                          <span key={i} className="px-2.5 py-1 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20 text-xs font-semibold rounded-lg">{kw}</span>
+                        )) : <p className="text-sm text-slate-500">None! You hit all major keywords.</p>}
+                      </div>
+                    </div>
+                    
+                    <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                      <h4 className="text-sm font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-2 mb-4">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        Matched Keywords
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {optimizationData.matched_keywords.length > 0 ? optimizationData.matched_keywords.map((kw, i) => (
+                          <span key={i} className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20 text-xs font-semibold rounded-lg">{kw}</span>
+                        )) : <p className="text-sm text-slate-500">None detected.</p>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Suggested Summary</h4>
+                    <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed font-medium">
+                      {optimizationData.tailored_summary}
+                    </p>
+                  </div>
+
+                  {/* Bullet Points */}
+                  <div>
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4 ml-1">Bullet Point Rewrites</h4>
+                    <div className="space-y-4">
+                      {optimizationData.bullet_suggestions.map((suggestion, i) => (
+                        <div key={i} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 relative group">
+                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-2xl opacity-50"></div>
+                          <div className="mb-3">
+                            <span className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Rewrite Idea based on:</span>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 line-through decoration-rose-500/50">{suggestion.original_concept}</p>
+                          </div>
+                          <div className="mb-3">
+                            <span className="text-[10px] font-bold uppercase text-blue-500 mb-1 block">Optimized Bullet:</span>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-white leading-relaxed">{suggestion.suggested_bullet}</p>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                            <p className="text-xs text-slate-500 dark:text-slate-400"><strong className="text-slate-600 dark:text-slate-300">Why:</strong> {suggestion.reasoning}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                </div>
+              ) : null}
+            </div>
+            
+          </div>
+        </div>
+      )}
 
       {/* ── Custom keyframes via inline style ── */}
       <style jsx global>{`
