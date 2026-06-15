@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import users, jobs, resume
+from app.api.endpoints import users, jobs, resume, applications
 
 app = FastAPI(title="Job Hunt AI API")
 
@@ -16,6 +16,7 @@ app.add_middleware(
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(jobs.router, prefix="/jobs", tags=["Jobs"])
 app.include_router(resume.router, prefix="/resume", tags=["Resume"])
+app.include_router(applications.router, prefix="/applications", tags=["Applications"])
 
 @app.get("/")
 def read_root():

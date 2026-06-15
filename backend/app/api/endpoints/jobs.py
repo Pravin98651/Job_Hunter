@@ -30,6 +30,8 @@ def get_scored_jobs(db: Session = Depends(get_db), skip: int = 0, limit: int = 5
             "location": job.location,
             "salaryMin": job.salary_min,
             "salaryMax": job.salary_max,
+            "source": job.source,
+            "description": job.description,
             "matchScore": score.match_score,
             "matchReason": score.match_reason,
             "skillGaps": score.skill_gaps,

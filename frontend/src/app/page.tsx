@@ -15,7 +15,40 @@ interface Job {
   matchReason: string;
   skillGaps: string[];
   applyUrl: string;
+  source?: string;
+  description?: string;
 }
+
+type AppStatus = "bookmarked" | "applied" | "interviewing" | "rejected" | "offer";
+
+interface TrackedApp {
+  applicationId: string;
+  listingId: string;
+  status: AppStatus;
+  coverLetter: string | null;
+  notes: string | null;
+  appliedAt: string | null;
+  createdAt: string | null;
+  title: string;
+  company: string;
+  location: string;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  source: string;
+  description: string;
+  applyUrl: string | null;
+  matchScore: number | null;
+  matchReason: string | null;
+  skillGaps: string[] | null;
+}
+
+const KANBAN_COLUMNS: { key: AppStatus; label: string; color: string; icon: string }[] = [
+  { key: "bookmarked", label: "Bookmarked", color: "slate", icon: "M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" },
+  { key: "applied", label: "Applied", color: "blue", icon: "M12 19l9 2-9-18-9 18 9-2zm0 0v-8" },
+  { key: "interviewing", label: "Interviewing", color: "amber", icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" },
+  { key: "rejected", label: "Rejected", color: "rose", icon: "M6 18L18 6M6 6l12 12" },
+  { key: "offer", label: "Offer 🎉", color: "emerald", icon: "M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" },
+];
 
 interface Preferences {
   targetTitle: string;
@@ -236,7 +269,7 @@ function SectionCard({ icon, title, children }: { icon: React.ReactNode; title: 
 /* ════════════════════════ MAIN DASHBOARD ════════════════════════ */
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<"matches" | "preferences">("matches");
+  const [activeTab, setActiveTab] = useState<"matches" | "preferences" | "pipeline">("matches");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isScraping, setIsScraping] = useState(false);
@@ -260,6 +293,13 @@ export default function Dashboard() {
   const [optimizationJob, setOptimizationJob] = useState<Job | null>(null);
   const [optimizationData, setOptimizationData] = useState<OptimizationResult | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
+
+  /* ── Pipeline / Kanban state ── */
+  const [trackedApps, setTrackedApps] = useState<TrackedApp[]>([]);
+  const [isLoadingPipeline, setIsLoadingPipeline] = useState(false);
+  const [coverLetterModal, setCoverLetterModal] = useState<TrackedApp | null>(null);
+  const [generatedCoverLetter, setGeneratedCoverLetter] = useState<string | null>(null);
+  const [isGeneratingCL, setIsGeneratingCL] = useState(false);
 
   /* ── Toast helper ── */
   const showToast = useCallback((message: string, type: Toast["type"] = "success") => {
@@ -437,6 +477,106 @@ export default function Dashboard() {
     }
   }, [resumeProfile, showToast]);
 
+  /* ── Pipeline handlers ── */
+  const fetchTrackedApps = useCallback(async () => {
+    setIsLoadingPipeline(true);
+    try {
+      const res = await fetch("/api/applications/");
+      const data = await res.json();
+      setTrackedApps(data);
+    } catch (err) {
+      console.error("Failed to fetch tracked apps:", err);
+    } finally {
+      setIsLoadingPipeline(false);
+    }
+  }, []);
+
+  const handleTrackJob = useCallback(async (job: Job) => {
+    try {
+      const res = await fetch("/api/applications/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listing_id: job.id,
+          user_id: "00000000-0000-0000-0000-000000000000",
+          status: "bookmarked",
+        }),
+      });
+      if (res.status === 409) {
+        showToast("Already tracking this job", "info");
+        return;
+      }
+      if (!res.ok) throw new Error("Failed to track");
+      showToast(`Bookmarked "${job.title}"`, "success");
+      fetchTrackedApps();
+    } catch {
+      showToast("Failed to track job", "error");
+    }
+  }, [showToast, fetchTrackedApps]);
+
+  const handleUpdateStatus = useCallback(async (appId: string, newStatus: AppStatus) => {
+    try {
+      const res = await fetch(`/api/applications/${appId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      setTrackedApps((prev) =>
+        prev.map((a) => (a.applicationId === appId ? { ...a, status: newStatus } : a))
+      );
+    } catch {
+      showToast("Failed to update status", "error");
+    }
+  }, [showToast]);
+
+  const handleRemoveTrack = useCallback(async (appId: string) => {
+    try {
+      await fetch(`/api/applications/${appId}`, { method: "DELETE" });
+      setTrackedApps((prev) => prev.filter((a) => a.applicationId !== appId));
+      showToast("Removed from pipeline", "info");
+    } catch {
+      showToast("Failed to remove", "error");
+    }
+  }, [showToast]);
+
+  const handleGenerateCoverLetter = useCallback(async (app: TrackedApp) => {
+    if (!resumeProfile) {
+      showToast("Upload your resume in Preferences first", "error");
+      return;
+    }
+    setCoverLetterModal(app);
+    setGeneratedCoverLetter(app.coverLetter);
+    if (app.coverLetter) return; // Already generated
+
+    setIsGeneratingCL(true);
+    try {
+      const res = await fetch(`/api/applications/${app.applicationId}/cover-letter`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume_profile: resumeProfile }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Generation failed");
+      setGeneratedCoverLetter(data.coverLetter);
+      setTrackedApps((prev) =>
+        prev.map((a) =>
+          a.applicationId === app.applicationId ? { ...a, coverLetter: data.coverLetter } : a
+        )
+      );
+      showToast("Cover letter generated!", "success");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Failed to generate", "error");
+    } finally {
+      setIsGeneratingCL(false);
+    }
+  }, [resumeProfile, showToast]);
+
+  // Fetch pipeline data when switching to pipeline tab
+  useEffect(() => {
+    if (activeTab === "pipeline") fetchTrackedApps();
+  }, [activeTab, fetchTrackedApps]);
+
   /* ── Derived data ── */
   const filteredJobs = jobs.filter((j) => j.matchScore >= filterMin);
   const avgScore = jobs.length ? Math.round(jobs.reduce((a, j) => a + j.matchScore, 0) / jobs.length) : 0;
@@ -521,27 +661,28 @@ export default function Dashboard() {
           {/* Tab switcher */}
           <div className="flex justify-center">
             <div className="flex bg-slate-100/80 dark:bg-slate-800/50 backdrop-blur-xl rounded-full p-1 border border-slate-200/50 dark:border-white/[0.06] shadow-sm">
-              {(["matches", "preferences"] as const).map((tab) => (
+              {(["matches", "pipeline", "preferences"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`relative px-6 sm:px-8 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${
+                  className={`relative px-5 sm:px-7 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${
                     activeTab === tab
                       ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-md"
                       : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                   }`}
                 >
-                  {tab === "matches" ? (
-                    <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-2">
+                    {tab === "matches" && (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                      Matches
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
+                    )}
+                    {tab === "pipeline" && (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
+                    )}
+                    {tab === "preferences" && (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                      Preferences
-                    </span>
-                  )}
+                    )}
+                    {tab === "matches" ? "Matches" : tab === "pipeline" ? `Pipeline${trackedApps.length ? ` (${trackedApps.length})` : ""}` : "Preferences"}
+                  </span>
                 </button>
               ))}
             </div>
@@ -668,7 +809,7 @@ export default function Dashboard() {
               <div className="flex flex-col gap-6">
                 {filteredJobs.map((job, idx) => (
                   <div key={job.id || idx} className="animate-[fadeUp_0.4s_ease-out]" style={{ animationDelay: `${idx * 60}ms`, animationFillMode: "backwards" }}>
-                    <JobCard {...job} onOptimize={() => handleOptimize(job)} />
+                    <JobCard {...job} onOptimize={() => handleOptimize(job)} onTrack={() => handleTrackJob(job)} />
                   </div>
                 ))}
               </div>
@@ -1045,7 +1186,167 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* ══════════════════════ PIPELINE TAB ══════════════════════ */}
+        {activeTab === "pipeline" && (
+          <div className="animate-[fadeUp_0.5s_ease-out]">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">Application Pipeline</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Track your applications through the hiring process. Bookmark jobs from Matches to get started.</p>
+            </div>
+
+            {isLoadingPipeline ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+              </div>
+            ) : trackedApps.length === 0 ? (
+              <div className="text-center py-20">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7" /></svg>
+                </div>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white">No tracked applications</h3>
+                <p className="text-sm text-slate-500 mt-2 max-w-sm mx-auto">Go to the Matches tab and click the bookmark icon on jobs you want to track.</p>
+              </div>
+            ) : (
+              <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4">
+                {KANBAN_COLUMNS.map((col) => {
+                  const colApps = trackedApps.filter((a) => a.status === col.key);
+                  const colorMap: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+                    slate:   { bg: "bg-slate-50 dark:bg-slate-900/50", border: "border-slate-200 dark:border-slate-800", text: "text-slate-600 dark:text-slate-400", badge: "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" },
+                    blue:    { bg: "bg-blue-50/50 dark:bg-blue-500/5", border: "border-blue-200/60 dark:border-blue-500/20", text: "text-blue-600 dark:text-blue-400", badge: "bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300" },
+                    amber:   { bg: "bg-amber-50/50 dark:bg-amber-500/5", border: "border-amber-200/60 dark:border-amber-500/20", text: "text-amber-600 dark:text-amber-400", badge: "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+                    rose:    { bg: "bg-rose-50/50 dark:bg-rose-500/5", border: "border-rose-200/60 dark:border-rose-500/20", text: "text-rose-600 dark:text-rose-400", badge: "bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300" },
+                    emerald: { bg: "bg-emerald-50/50 dark:bg-emerald-500/5", border: "border-emerald-200/60 dark:border-emerald-500/20", text: "text-emerald-600 dark:text-emerald-400", badge: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+                  };
+                  const colors = colorMap[col.color];
+
+                  return (
+                    <div key={col.key} className={`flex-shrink-0 w-72 rounded-2xl border ${colors.border} ${colors.bg} p-4`}>
+                      {/* Column header */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <svg className={`w-4 h-4 ${colors.text}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={col.icon} /></svg>
+                          <h3 className={`text-sm font-bold ${colors.text} uppercase tracking-wider`}>{col.label}</h3>
+                        </div>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${colors.badge}`}>{colApps.length}</span>
+                      </div>
+
+                      {/* Cards */}
+                      <div className="flex flex-col gap-3">
+                        {colApps.map((app) => (
+                          <div key={app.applicationId} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700/50 p-4 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="min-w-0">
+                                <h4 className="text-sm font-bold text-slate-800 dark:text-white truncate">{app.title}</h4>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{app.company} · {app.location}</p>
+                              </div>
+                              {app.matchScore !== null && (
+                                <span className={`shrink-0 text-xs font-black px-2 py-1 rounded-lg ${
+                                  app.matchScore >= 75 ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400" :
+                                  app.matchScore >= 50 ? "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400" :
+                                  "bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400"
+                                }`}>{app.matchScore}%</span>
+                              )}
+                            </div>
+
+                            {/* Status selector */}
+                            <select
+                              value={app.status}
+                              onChange={(e) => handleUpdateStatus(app.applicationId, e.target.value as AppStatus)}
+                              className="w-full text-xs font-semibold bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1.5 mb-3 outline-none focus:ring-2 focus:ring-blue-500/30"
+                            >
+                              {KANBAN_COLUMNS.map((c) => (
+                                <option key={c.key} value={c.key}>{c.label}</option>
+                              ))}
+                            </select>
+
+                            {/* Action buttons */}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleGenerateCoverLetter(app)}
+                                className="flex-1 text-[11px] font-semibold py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors truncate"
+                              >
+                                {app.coverLetter ? "✏️ View Letter" : "✨ Cover Letter"}
+                              </button>
+                              {app.applyUrl && (
+                                <a
+                                  href={app.applyUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[11px] font-semibold py-1.5 px-3 rounded-lg bg-slate-900 text-white hover:bg-blue-600 dark:bg-white dark:text-slate-900 dark:hover:bg-blue-500 dark:hover:text-white transition-colors"
+                                >
+                                  Apply
+                                </a>
+                              )}
+                              <button
+                                onClick={() => handleRemoveTrack(app.applicationId)}
+                                className="text-[11px] font-semibold py-1.5 px-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
+                                title="Remove"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* ══════════════════════ COVER LETTER MODAL ══════════════════════ */}
+      {coverLetterModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setCoverLetterModal(null); setGeneratedCoverLetter(null); }} />
+          <div className="relative w-full max-w-3xl max-h-[85vh] flex flex-col bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-[fadeUp_0.3s_ease-out]">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  Cover Letter
+                </h3>
+                <p className="text-sm text-slate-500 mt-0.5">{coverLetterModal.title} at {coverLetterModal.company}</p>
+              </div>
+              <button onClick={() => { setCoverLetterModal(null); setGeneratedCoverLetter(null); }} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {isGeneratingCL ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="relative">
+                    <div className="w-14 h-14 rounded-full border-4 border-slate-100 dark:border-slate-800" />
+                    <div className="w-14 h-14 rounded-full border-4 border-blue-500 border-t-transparent animate-spin absolute top-0 left-0" />
+                  </div>
+                  <p className="mt-5 text-sm font-semibold text-slate-600 dark:text-slate-300">Generating with Gemini AI...</p>
+                  <p className="text-xs text-slate-400 mt-1">Crafting a personalized cover letter based on your resume</p>
+                </div>
+              ) : generatedCoverLetter ? (
+                <div>
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    {generatedCoverLetter.split('\n').map((p, i) => (
+                      <p key={i} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-3">{p}</p>
+                    ))}
+                  </div>
+                  <div className="mt-6 flex gap-3">
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(generatedCoverLetter); showToast("Copied to clipboard!", "success"); }}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-slate-900 text-white hover:bg-blue-600 dark:bg-white dark:text-slate-900 dark:hover:bg-blue-500 dark:hover:text-white transition-all"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                      Copy to Clipboard
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════════ OPTIMIZATION MODAL ══════════════════════ */}
       {(optimizationJob || isOptimizing) && (
