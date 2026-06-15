@@ -148,12 +148,20 @@ Return ONLY a valid JSON object (no markdown, no explanation outside the JSON):
 }}
 
 Generate between 8 and 10 questions.  Make them specific to the role, not
-generic.  Each tip should be actionable and concise."""
+generic.  Each tip should be actionable and concise.
+
+## Strict Anti-Hallucination Constraints
+- DO NOT invent details about the company that are not widely known.
+- DO NOT invent skills for the candidate. If the candidate profile is empty, base questions purely on the JD.
+"""
 
     try:
         response = _client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt,
+            config=genai.types.GenerateContentConfig(
+                temperature=0.0,
+            ),
         )
         data = _extract_json(response.text)
 
@@ -222,12 +230,20 @@ Return ONLY a valid JSON object (no markdown, no explanation outside the JSON):
 }}
 
 Be specific and factual.  If you are unsure about recent news, note that the
-information should be verified.  Aim for 3-5 items in each list."""
+information should be verified.  Aim for 3-5 items in each list.
+
+## Strict Anti-Hallucination Constraints
+- DO NOT invent recent news or fake events. If no recent news is known, return an empty list or state "No major recent news found."
+- Ensure the overview is factually accurate to the best of your knowledge.
+"""
 
     try:
         response = _client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt,
+            config=genai.types.GenerateContentConfig(
+                temperature=0.0,
+            ),
         )
         data = _extract_json(response.text)
 

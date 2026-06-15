@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ScoreBar } from './ScoreBar';
+import { MapPin, DollarSign, Sparkles, ChevronDown, BookmarkPlus, ExternalLink, Wrench, CircleDot } from 'lucide-react';
 
 interface JobCardProps {
   title: string;
@@ -14,6 +15,7 @@ interface JobCardProps {
   source?: string;
   onOptimize?: () => void;
   onTrack?: () => void;
+  onApply?: () => void;
 }
 
 export function JobCard(props: JobCardProps) {
@@ -21,7 +23,7 @@ export function JobCard(props: JobCardProps) {
 
   const getScoreColor = (score: number) => {
     if (score >= 90) return { bg: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/20' };
-    if (score >= 75) return { bg: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', ring: 'ring-blue-500/20' };
+    if (score >= 75) return { bg: 'bg-indigo-500', text: 'text-indigo-600 dark:text-indigo-400', ring: 'ring-indigo-500/20' };
     if (score >= 50) return { bg: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400', ring: 'ring-amber-500/20' };
     return { bg: 'bg-rose-500', text: 'text-rose-600 dark:text-rose-400', ring: 'ring-rose-500/20' };
   };
@@ -29,80 +31,80 @@ export function JobCard(props: JobCardProps) {
   const scoreColors = getScoreColor(props.matchScore);
 
   return (
-    <div className="group relative rounded-2xl transition-all duration-300 bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-black/30 overflow-hidden">
+    <div className="group relative rounded-2xl transition-all duration-300 bg-card hover:bg-muted/30 border border-border hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 overflow-hidden">
       {/* Top accent line based on score */}
-      <div className={`absolute top-0 left-0 right-0 h-[2px] ${scoreColors.bg} opacity-60`}></div>
+      <div className={`absolute top-0 left-0 right-0 h-1 ${scoreColors.bg} opacity-80`}></div>
 
       <div className="p-6 sm:p-7">
         {/* Header row */}
         <div className="flex justify-between items-start gap-4">
           <div className="flex-1 min-w-0">
             {/* Company + Location row */}
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm font-black text-slate-500 dark:text-slate-400 shrink-0">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-sm font-black text-primary shrink-0">
                 {props.company.charAt(0).toUpperCase()}
               </div>
-              <span className="text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">{props.company}</span>
-              <span className="text-slate-300 dark:text-slate-600">·</span>
-              <span className="text-sm text-slate-400 dark:text-slate-500 truncate flex items-center gap-1">
-                <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              <span className="text-sm font-semibold text-muted-foreground truncate">{props.company}</span>
+              <span className="text-muted-foreground/40">•</span>
+              <span className="text-sm text-muted-foreground truncate flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5" />
                 {props.location}
               </span>
             </div>
 
             {/* Title */}
-            <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white leading-snug tracking-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+            <h3 className="text-xl sm:text-2xl font-bold text-foreground leading-tight tracking-tight group-hover:text-primary transition-colors">
               {props.title}
             </h3>
 
             {/* Salary if available */}
             {(props.salaryMin || props.salaryMax) && (
-              <p className="mt-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <p className="mt-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <DollarSign className="w-3.5 h-3.5" />
                 ${props.salaryMin?.toLocaleString()} – ${props.salaryMax?.toLocaleString()}
               </p>
             )}
           </div>
 
           {/* Score badge */}
-          <div className={`shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-2xl ${scoreColors.ring} ring-2 bg-white dark:bg-slate-800`}>
+          <div className={`shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-2xl ${scoreColors.ring} ring-2 bg-background shadow-sm`}>
             <span className={`text-2xl font-black leading-none ${scoreColors.text}`}>{props.matchScore}</span>
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">score</span>
+            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">score</span>
           </div>
         </div>
 
         {/* Score bar */}
-        <div className="mt-4">
+        <div className="mt-5">
           <ScoreBar score={props.matchScore} />
         </div>
 
         {/* AI Analysis — collapsible */}
-        <div className="mt-4">
+        <div className="mt-5">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="w-full flex items-center justify-between text-left group/ai"
+            className="w-full flex items-center justify-between text-left group/ai py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-lg"
           >
-            <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+            <span className="text-xs font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4" />
               AI Analysis
             </span>
-            <svg className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
           </button>
 
-          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-96 opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
-            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50">
+          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[500px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
+            <p className="text-sm text-foreground/80 leading-relaxed bg-muted/50 rounded-xl p-4 border border-border">
               {props.matchReason}
             </p>
 
             {props.skillGaps.length > 0 && (
-              <div className="mt-3">
-                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              <div className="mt-4">
+                <p className="text-xs font-bold text-rose-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                  <CircleDot className="w-3.5 h-3.5" />
                   Skills to Develop
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {props.skillGaps.map((skill, idx) => (
-                    <span key={idx} className="px-2.5 py-1 bg-rose-50 border border-rose-100 text-rose-600 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-400 text-xs font-semibold rounded-lg">
+                    <span key={idx} className="px-2.5 py-1 bg-rose-50 border border-rose-100 text-rose-600 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-400 text-xs font-medium rounded-md">
                       {skill}
                     </span>
                   ))}
@@ -111,12 +113,12 @@ export function JobCard(props: JobCardProps) {
             )}
             
             {props.onOptimize && (
-              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700/50 flex justify-end">
+              <div className="mt-5 pt-4 border-t border-border flex justify-end">
                 <button 
                   onClick={(e) => { e.stopPropagation(); props.onOptimize!(); }}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors"
+                  className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                  <Wrench className="w-3.5 h-3.5" />
                   Optimize Resume for this Role
                 </button>
               </div>
@@ -125,18 +127,18 @@ export function JobCard(props: JobCardProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between mt-6 pt-5 border-t border-border">
           <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400 font-medium capitalize">via {props.source || 'linkedin'}</span>
+            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">via {props.source || 'linkedin'}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {props.onTrack && (
               <button
                 onClick={(e) => { e.stopPropagation(); props.onTrack!(); }}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 dark:hover:bg-blue-500/10 dark:hover:text-blue-400 transition-all"
+                className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl border border-border text-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 title="Track in Pipeline"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+                <BookmarkPlus className="w-4 h-4" />
                 Track
               </button>
             )}
@@ -144,10 +146,11 @@ export function JobCard(props: JobCardProps) {
               href={props.applyUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-slate-900 hover:bg-blue-600 dark:bg-white dark:hover:bg-blue-500 dark:text-slate-900 dark:hover:text-white text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 hover:shadow-lg active:scale-[0.97]"
+              onClick={() => props.onApply?.()}
+              className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold px-6 py-2.5 rounded-xl transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               Apply
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+              <ExternalLink className="w-4 h-4" />
             </a>
           </div>
         </div>

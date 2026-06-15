@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { JobCard } from "@/components/JobCard";
+import { Search, MapPin, Briefcase, LayoutDashboard, BarChart3, Presentation, Settings, CheckCircle2, XCircle, AlertCircle, Loader2, Sparkles, Filter, Bookmark, Play, CheckCircle, ExternalLink, CalendarDays, LineChart, FileText, UploadCloud, ChevronRight, Check, Target } from "lucide-react";
 
 /* ───────────────────────────── Types ───────────────────────────── */
 
@@ -42,12 +43,12 @@ interface TrackedApp {
   skillGaps: string[] | null;
 }
 
-const KANBAN_COLUMNS: { key: AppStatus; label: string; color: string; icon: string }[] = [
-  { key: "bookmarked", label: "Bookmarked", color: "slate", icon: "M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" },
-  { key: "applied", label: "Applied", color: "blue", icon: "M12 19l9 2-9-18-9 18 9-2zm0 0v-8" },
-  { key: "interviewing", label: "Interviewing", color: "amber", icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" },
-  { key: "rejected", label: "Rejected", color: "rose", icon: "M6 18L18 6M6 6l12 12" },
-  { key: "offer", label: "Offer 🎉", color: "emerald", icon: "M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" },
+const KANBAN_COLUMNS: { key: AppStatus; label: string; color: string; icon: React.ReactNode }[] = [
+  { key: "bookmarked", label: "Bookmarked", color: "slate", icon: <Bookmark className="w-4 h-4" /> },
+  { key: "applied", label: "Applied", color: "blue", icon: <CheckCircle2 className="w-4 h-4" /> },
+  { key: "interviewing", label: "Interviewing", color: "amber", icon: <Presentation className="w-4 h-4" /> },
+  { key: "rejected", label: "Rejected", color: "rose", icon: <XCircle className="w-4 h-4" /> },
+  { key: "offer", label: "Offer 🎉", color: "emerald", icon: <Sparkles className="w-4 h-4" /> },
 ];
 
 interface Preferences {
@@ -203,7 +204,7 @@ function TagInput({
               onClick={() => onChange(tags.filter((x) => x !== t))}
               className="ml-0.5 hover:text-red-500 transition-colors"
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+              <XCircle className="w-3 h-3" />
             </button>
           </span>
         ))}
@@ -530,6 +531,35 @@ export default function Dashboard() {
     }
   }, [showToast, fetchTrackedApps]);
 
+  const handleApplyJob = useCallback(async (job: Job) => {
+    try {
+      // Create or update status to 'applied'
+      const res = await fetch("/api/applications/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listing_id: job.id,
+          user_id: "00000000-0000-0000-0000-000000000000",
+          status: "applied",
+        }),
+      });
+      
+      if (res.status === 409) {
+        // If already tracking, try to fetch its app_id to update status
+        // We'll just do a silent refresh of the pipeline to see if it's there
+        // Note: Full implementation would PATCH /api/applications/{app_id}/status
+        // Since we don't return app_id on 409 currently, we'll just show a toast.
+        showToast(`Opened application. Check Pipeline.`, "info");
+      } else if (res.ok) {
+        showToast(`Moved "${job.title}" to Applied pipeline`, "success");
+      }
+      fetchTrackedApps();
+    } catch {
+      console.error("Failed to track apply click");
+    }
+  }, [showToast, fetchTrackedApps]);
+
+
   const handleUpdateStatus = useCallback(async (appId: string, newStatus: AppStatus) => {
     try {
       const res = await fetch(`/api/applications/${appId}/status`, {
@@ -555,6 +585,25 @@ export default function Dashboard() {
       showToast("Failed to remove", "error");
     }
   }, [showToast]);
+
+  const handleAutoFill = useCallback(async (app: TrackedApp) => {
+    if (!resumeProfile) {
+      showToast("Upload your resume in Preferences first to use auto-fill", "error");
+      return;
+    }
+    showToast("Launching browser for Auto-Fill... Please wait.", "success");
+    try {
+      const res = await fetch(`/api/applications/${app.applicationId}/auto-fill`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume_profile: resumeProfile })
+      });
+      if (!res.ok) throw new Error("Failed to trigger auto-fill");
+    } catch (error) {
+      console.error(error);
+      showToast("Failed to launch auto-fill", "error");
+    }
+  }, [resumeProfile, showToast]);
 
   const handleGenerateCoverLetter = useCallback(async (app: TrackedApp) => {
     if (!resumeProfile) {
@@ -706,10 +755,10 @@ export default function Dashboard() {
           >
             <div className="flex items-center gap-2.5">
               {toast.type === "success" && (
-                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
               )}
               {toast.type === "error" && (
-                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01M12 3l9.66 16.5H2.34L12 3z" /></svg>
+                <AlertCircle className="w-4 h-4 shrink-0" />
               )}
               {toast.message}
             </div>
@@ -717,124 +766,118 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="max-w-5xl mx-auto relative z-10 px-4 sm:px-6 lg:px-8 pb-24">
-        {/* ══════════════════════ HEADER ══════════════════════ */}
-        <header className="pt-12 sm:pt-16 pb-12 sm:pb-16">
-          {/* Hero */}
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide uppercase bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200/50 dark:border-blue-500/20 mb-6">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-              AI-Powered Career Agent
+      {/* ── Top Navigation Bar ── */}
+      <nav className="sticky top-0 z-40 w-full bg-background/80 backdrop-blur-2xl border-b border-border shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-primary" />
             </div>
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-[-0.04em] leading-[0.9] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-500 dark:from-white dark:via-slate-200 dark:to-slate-500 bg-clip-text text-transparent animate-[fadeUp_0.6s_ease-out]">
-              Job Hunt
-              <span className="block bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 bg-clip-text text-transparent animate-[gradient_6s_ease_infinite] bg-[length:200%_auto]">
-                AI
-              </span>
-            </h1>
-            <p className="mt-4 text-slate-500 dark:text-slate-400 text-base sm:text-lg font-medium max-w-md mx-auto leading-relaxed">
-              Your autonomous agent that finds, evaluates, and ranks the perfect roles for you.
-            </p>
+            <span className="text-lg font-heading font-black tracking-tight hidden sm:block">JobHunt AI</span>
           </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-3 sm:gap-4 max-w-lg mx-auto mb-10">
-            {[
-              { label: "Jobs Found", value: jobs.length, color: "text-blue-600 dark:text-blue-400" },
-              { label: "Avg Match", value: `${avgScore}%`, color: "text-emerald-600 dark:text-emerald-400" },
-              { label: "Searches", value: searchCount, color: "text-violet-600 dark:text-violet-400" },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="bg-white/70 dark:bg-slate-900/50 backdrop-blur-xl border border-white/60 dark:border-white/[0.06] rounded-2xl py-4 px-3 text-center shadow-sm"
+          
+          <div className="flex bg-muted/50 p-1 rounded-xl border border-border overflow-x-auto no-scrollbar">
+            {(["matches", "pipeline", "analytics", "interview", "preferences"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`relative px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                  activeTab === tab
+                    ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
               >
-                <div className={`text-2xl sm:text-3xl font-black tracking-tight ${stat.color}`}>{stat.value}</div>
-                <div className="text-[11px] sm:text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-1">{stat.label}</div>
-              </div>
+                {tab === "matches" && <Search className="w-4 h-4" />}
+                {tab === "pipeline" && <LayoutDashboard className="w-4 h-4" />}
+                {tab === "analytics" && <BarChart3 className="w-4 h-4" />}
+                {tab === "interview" && <Presentation className="w-4 h-4" />}
+                {tab === "preferences" && <Settings className="w-4 h-4" />}
+                <span className="hidden md:inline capitalize">{tab}</span>
+              </button>
             ))}
           </div>
+        </div>
+      </nav>
 
-          {/* Tab switcher */}
-          <div className="flex justify-center">
-            <div className="flex bg-slate-100/80 dark:bg-slate-800/50 backdrop-blur-xl rounded-full p-1 border border-slate-200/50 dark:border-white/[0.06] shadow-sm">
-              {(["matches", "pipeline", "analytics", "interview", "preferences"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`relative px-3 sm:px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${
-                    activeTab === tab
-                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-md"
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                  }`}
-                >
-                  <span className="flex items-center gap-1.5">
-                    {tab === "matches" && (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                    )}
-                    {tab === "pipeline" && (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
-                    )}
-                    {tab === "analytics" && (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                    )}
-                    {tab === "interview" && (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                    )}
-                    {tab === "preferences" && (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                    )}
-                    <span className="hidden sm:inline">
-                      {tab === "matches" ? "Matches" : tab === "pipeline" ? "Pipeline" : tab === "analytics" ? "Analytics" : tab === "interview" ? "Interview" : "Preferences"}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
+      <div className="max-w-6xl mx-auto relative z-10 px-4 sm:px-6 lg:px-8 pb-24 pt-10">
+        
+        {/* ══════════════════════ HERO SECTION ══════════════════════ */}
+        <header className="mb-14 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide uppercase bg-primary/10 text-primary border border-primary/20 mb-6">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            Autonomous Career Agent
+          </div>
+          <h1 className="text-5xl sm:text-6xl font-heading font-black tracking-tight leading-[1.1] text-foreground mb-4">
+            Find the perfect role, <br className="hidden sm:block" />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-violet-500">
+              automatically.
+            </span>
+          </h1>
+          <p className="text-muted-foreground text-lg sm:text-xl font-medium max-w-2xl mx-auto leading-relaxed">
+            Your AI agent that scrapes, scores, and ranks jobs based on your unique resume.
+          </p>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3 sm:gap-6 max-w-xl mx-auto mt-10">
+            {[
+              { label: "Jobs Found", value: jobs.length, icon: Briefcase },
+              { label: "Avg Match", value: `${avgScore}%`, icon: Sparkles },
+              { label: "Searches", value: searchCount, icon: Search },
+            ].map((stat, i) => (
+              <div
+                key={stat.label}
+                className="bg-card/50 backdrop-blur-sm border border-border rounded-2xl py-5 px-4 text-center shadow-sm flex flex-col items-center justify-center group hover:border-primary/30 transition-colors"
+              >
+                <stat.icon className="w-5 h-5 text-muted-foreground mb-2 group-hover:text-primary transition-colors" />
+                <div className="text-2xl sm:text-3xl font-heading font-black text-foreground">{stat.value}</div>
+                <div className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-widest mt-1">{stat.label}</div>
+              </div>
+            ))}
           </div>
         </header>
 
         {/* ══════════════════════ MATCHES TAB ══════════════════════ */}
         {activeTab === "matches" && (
-          <div className="flex flex-col gap-6 animate-[fadeUp_0.5s_ease-out]">
+          <div className="flex flex-col gap-6 animate-[fadeUp_0.4s_ease-out]">
             {/* ── Control bar ── */}
-            <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-5 shadow-sm">
+            <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
               {/* Search row */}
               <div className="flex flex-col sm:flex-row gap-3 mb-4">
                 <div className="flex-1 relative">
-                  <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
                     placeholder="Job title, e.g. AI Engineer"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/50 text-sm font-medium focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all outline-none"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-background border border-border text-sm font-medium focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all outline-none"
                   />
                 </div>
-                <div className="relative sm:w-48">
-                  <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                <div className="relative sm:w-56">
+                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <input
                     type="text"
                     value={searchLocation}
                     onChange={(e) => setSearchLocation(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
                     placeholder="Location"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/50 text-sm font-medium focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all outline-none"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-background border border-border text-sm font-medium focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all outline-none"
                   />
                 </div>
                 <button
                   onClick={handleSearch}
                   disabled={isScraping}
-                  className="px-6 py-2.5 rounded-xl text-sm font-semibold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-blue-600 dark:hover:bg-blue-50 shadow-md hover:shadow-lg transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 shrink-0"
+                  className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-all duration-200 active:translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   {isScraping ? (
                     <>
-                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                      <Loader2 className="animate-spin h-4 w-4" />
                       Scanning…
                     </>
                   ) : (
                     <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                      <Search className="w-4 h-4" />
                       Trigger Scrape
                     </>
                   )}
@@ -898,7 +941,7 @@ export default function Dashboard() {
             ) : filteredJobs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 px-8 bg-white/50 dark:bg-slate-900/40 backdrop-blur-2xl rounded-2xl border border-white/50 dark:border-white/[0.06] text-center">
                 <div className="w-16 h-16 bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400 rounded-2xl flex items-center justify-center mb-5 border border-blue-100 dark:border-blue-500/20">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <Search className="w-8 h-8" />
                 </div>
                 <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">
                   {jobs.length > 0 ? "No jobs match this filter" : "No scored jobs yet"}
@@ -913,7 +956,7 @@ export default function Dashboard() {
               <div className="flex flex-col gap-6">
                 {filteredJobs.map((job, idx) => (
                   <div key={job.id || idx} className="animate-[fadeUp_0.4s_ease-out]" style={{ animationDelay: `${idx * 60}ms`, animationFillMode: "backwards" }}>
-                    <JobCard {...job} onOptimize={() => handleOptimize(job)} onTrack={() => handleTrackJob(job)} />
+                    <JobCard {...job} onOptimize={() => handleOptimize(job)} onTrack={() => handleTrackJob(job)} onApply={() => handleApplyJob(job)} />
                   </div>
                 ))}
               </div>
@@ -932,7 +975,7 @@ export default function Dashboard() {
             {/* ── Resume Upload Section ── */}
             <div className="mb-6">
               <SectionCard
-                icon={<svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+                icon={<Briefcase className="w-4.5 h-4.5" />}
                 title="Resume Upload"
               >
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Upload your resume to auto-fill your profile and get AI-matched job recommendations.</p>
@@ -965,13 +1008,13 @@ export default function Dashboard() {
 
                   {isUploadingResume ? (
                     <div className="flex flex-col items-center gap-3">
-                      <svg className="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                      <Loader2 className="animate-spin h-8 w-8 text-primary" />
                       <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">Analyzing resume with AI...</p>
                     </div>
                   ) : resumeProfile ? (
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center">
-                        <svg className="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-800 dark:text-white">{resumeFileName}</p>
@@ -982,7 +1025,7 @@ export default function Dashboard() {
                   ) : (
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                        <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                        <UploadCloud className="w-6 h-6 text-muted-foreground" />
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Drop your resume here or click to browse</p>
@@ -1035,7 +1078,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               {/* ── Profile ── */}
               <SectionCard
-                icon={<svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+                icon={<CheckCircle className="w-4.5 h-4.5" />}
                 title="Profile"
               >
                 <div className="space-y-4">
@@ -1077,7 +1120,7 @@ export default function Dashboard() {
 
               {/* ── Location ── */}
               <SectionCard
-                icon={<svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+                icon={<MapPin className="w-4.5 h-4.5" />}
                 title="Location"
               >
                 <div className="space-y-4">
@@ -1095,7 +1138,7 @@ export default function Dashboard() {
 
               {/* ── Salary ── */}
               <SectionCard
-                icon={<svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                icon={<Briefcase className="w-4.5 h-4.5" />}
                 title="Salary"
               >
                 <div className="space-y-4">
@@ -1137,7 +1180,7 @@ export default function Dashboard() {
 
               {/* ── Skills ── */}
               <SectionCard
-                icon={<svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>}
+                icon={<Sparkles className="w-4.5 h-4.5" />}
                 title="Skills"
               >
                 <div className="space-y-5">
@@ -1162,7 +1205,7 @@ export default function Dashboard() {
 
               {/* ── Job Type ── */}
               <SectionCard
-                icon={<svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
+                icon={<Target className="w-4.5 h-4.5" />}
                 title="Job Type"
               >
                 <div className="grid grid-cols-2 gap-2.5">
@@ -1190,7 +1233,7 @@ export default function Dashboard() {
                           isChecked ? "bg-blue-500 border-blue-500" : "border-slate-300 dark:border-slate-600"
                         }`}>
                           {isChecked && (
-                            <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                            <Check className="w-2.5 h-2.5 text-primary-foreground" />
                           )}
                         </div>
                         <span className="text-sm font-medium">{type}</span>
@@ -1202,7 +1245,7 @@ export default function Dashboard() {
 
               {/* ── Industry ── */}
               <SectionCard
-                icon={<svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}
+                icon={<Briefcase className="w-4.5 h-4.5" />}
                 title="Industry"
               >
                 <div className="flex flex-wrap gap-2">
@@ -1231,7 +1274,7 @@ export default function Dashboard() {
 
               {/* ── Notifications ── */}
               <SectionCard
-                icon={<svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>}
+                icon={<LineChart className="w-4.5 h-4.5" />}
                 title="Notifications"
               >
                 <div className="space-y-5">
@@ -1306,7 +1349,7 @@ export default function Dashboard() {
             ) : trackedApps.length === 0 ? (
               <div className="text-center py-20">
                 <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7" /></svg>
+                  <LayoutDashboard className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <h3 className="text-xl font-bold text-slate-800 dark:text-white">No tracked applications</h3>
                 <p className="text-sm text-slate-500 mt-2 max-w-sm mx-auto">Go to the Matches tab and click the bookmark icon on jobs you want to track.</p>
@@ -1329,7 +1372,7 @@ export default function Dashboard() {
                       {/* Column header */}
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
-                          <svg className={`w-4 h-4 ${colors.text}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={col.icon} /></svg>
+                          <span className={colors.text}>{col.icon}</span>
                           <h3 className={`text-sm font-bold ${colors.text} uppercase tracking-wider`}>{col.label}</h3>
                         </div>
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${colors.badge}`}>{colApps.length}</span>
@@ -1373,21 +1416,30 @@ export default function Dashboard() {
                                 {app.coverLetter ? "✏️ View Letter" : "✨ Cover Letter"}
                               </button>
                               {app.applyUrl && (
-                                <a
-                                  href={app.applyUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-[11px] font-semibold py-1.5 px-3 rounded-lg bg-slate-900 text-white hover:bg-blue-600 dark:bg-white dark:text-slate-900 dark:hover:bg-blue-500 dark:hover:text-white transition-colors"
-                                >
-                                  Apply
-                                </a>
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => handleAutoFill(app)}
+                                    className="text-[11px] font-semibold py-1.5 px-3 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20 transition-colors border border-indigo-200 dark:border-indigo-500/20"
+                                    title="Auto-Fill with Playwright"
+                                  >
+                                    ⚡ Auto-Fill
+                                  </button>
+                                  <a
+                                    href={app.applyUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] font-semibold py-1.5 px-3 rounded-lg bg-slate-900 text-white hover:bg-blue-600 dark:bg-white dark:text-slate-900 dark:hover:bg-blue-500 dark:hover:text-white transition-colors"
+                                  >
+                                    Apply
+                                  </a>
+                                </div>
                               )}
                               <button
                                 onClick={() => handleRemoveTrack(app.applicationId)}
                                 className="text-[11px] font-semibold py-1.5 px-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
                                 title="Remove"
                               >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                <FileText className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </div>
@@ -1420,7 +1472,7 @@ export default function Dashboard() {
                   {/* Pipeline Stats */}
                   <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
                     <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                      <ExternalLink className="w-4 h-4" />
                       Pipeline Funnel
                     </h3>
                     {pipelineStats ? (
@@ -1454,7 +1506,7 @@ export default function Dashboard() {
                   {/* Job Sources */}
                   <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
                     <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" /></svg>
+                      <Search className="w-4 h-4" />
                       Job Sources
                     </h3>
                     {sourceStats.length > 0 ? (
@@ -1480,7 +1532,7 @@ export default function Dashboard() {
                 {/* Skill Gaps */}
                 <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
                   <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                    <Sparkles className="w-4 h-4" />
                     Top Skill Gaps — Learn These Next
                   </h3>
                   <p className="text-xs text-slate-400 mb-4">Skills most frequently requested by employers but missing from your resume.</p>
@@ -1502,7 +1554,7 @@ export default function Dashboard() {
                 {/* Score Trends */}
                 <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
                   <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
+                    <Briefcase className="w-4 h-4" />
                     Match Score Trends
                   </h3>
                   {scoreTrends.length > 0 ? (
@@ -1577,7 +1629,7 @@ export default function Dashboard() {
                   {isLoadingInterview ? (
                     <><div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Generating...</>
                   ) : (
-                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Generate Questions</>
+                    <><Sparkles className="w-4 h-4" /> Generate Questions</>
                   )}
                 </button>
                 <button
@@ -1588,7 +1640,7 @@ export default function Dashboard() {
                   {isLoadingBrief ? (
                     <><div className="w-4 h-4 rounded-full border-2 border-slate-400/30 border-t-slate-400 animate-spin" /> Researching...</>
                   ) : (
-                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg> Company Brief</>
+                    <><Briefcase className="w-4 h-4" /> Company Brief</>
                   )}
                 </button>
               </div>
@@ -1656,13 +1708,13 @@ export default function Dashboard() {
             <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
               <div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  <FileText className="w-5 h-5 text-primary" />
                   Cover Letter
                 </h3>
                 <p className="text-sm text-slate-500 mt-0.5">{coverLetterModal.title} at {coverLetterModal.company}</p>
               </div>
               <button onClick={() => { setCoverLetterModal(null); setGeneratedCoverLetter(null); }} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                <XCircle className="w-5 h-5" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
@@ -1687,7 +1739,7 @@ export default function Dashboard() {
                       onClick={() => { navigator.clipboard.writeText(generatedCoverLetter); showToast("Copied to clipboard!", "success"); }}
                       className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-slate-900 text-white hover:bg-blue-600 dark:bg-white dark:text-slate-900 dark:hover:bg-blue-500 dark:hover:text-white transition-all"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                      <FileText className="w-4 h-4" />
                       Copy to Clipboard
                     </button>
                   </div>
@@ -1708,7 +1760,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
               <div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  <Sparkles className="w-5 h-5 text-primary" />
                   Resume Optimization
                 </h3>
                 {optimizationJob && (
@@ -1722,7 +1774,7 @@ export default function Dashboard() {
                 disabled={isOptimizing}
                 className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                <XCircle className="w-5 h-5" />
               </button>
             </div>
 
@@ -1743,7 +1795,7 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-rose-100 dark:border-rose-900/30">
                       <h4 className="text-sm font-bold uppercase tracking-wider text-rose-500 flex items-center gap-2 mb-4">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                        <AlertCircle className="w-4 h-4" />
                         Missing Keywords
                       </h4>
                       <div className="flex flex-wrap gap-2">
@@ -1755,7 +1807,7 @@ export default function Dashboard() {
                     
                     <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
                       <h4 className="text-sm font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-2 mb-4">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        <CheckCircle2 className="w-4 h-4" />
                         Matched Keywords
                       </h4>
                       <div className="flex flex-wrap gap-2">

@@ -63,6 +63,11 @@ Evaluate the job against the user profile on these dimensions:
 4. **Salary Match (10%)**: If salary info is available, does it meet the user's minimum? If no salary info, assume neutral.
 5. **Growth & Culture (10%)**: Does the role offer growth opportunities, interesting tech stack, or align with the user's career trajectory?
 
+## Strict Anti-Hallucination Constraints
+- DO NOT invent or hallucinate any skills not explicitly present in the user profile or job description.
+- Be highly objective. If there is a gap, state it clearly.
+- Rely ONLY on the provided text.
+
 ## Response Format
 Return ONLY a valid JSON object (no markdown, no explanation outside the JSON):
 {{
@@ -77,6 +82,9 @@ Return ONLY a valid JSON object (no markdown, no explanation outside the JSON):
         response = _client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt,
+            config=genai.types.GenerateContentConfig(
+                temperature=0.0,
+            ),
         )
         data = _extract_json(response.text)
         # Clamp score to 0-100

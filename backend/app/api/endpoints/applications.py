@@ -9,14 +9,16 @@ uses Gemini AI to generate tailored cover letters.
 import os
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+import asyncio
 
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.application import ApplicationStatus, ApplicationTrack
 from app.models.job import JobListing, JobScore
+from app.services.auto_apply import run_auto_fill
 
 # ---------------------------------------------------------------------------
 # Gemini client (same pattern as resume.py)
@@ -121,17 +123,23 @@ def track_application(
     if not listing:
         raise HTTPException(status_code=404, detail="Job listing not found")
 
-    # Prevent duplicate tracking for the same listing
+    # Prevent duplicate tracking or act as upsert
     existing = (
         db.query(ApplicationTrack)
         .filter(ApplicationTrack.listing_id == request.listing_id)
         .first()
     )
     if existing:
-        raise HTTPException(
-            status_code=409, detail="This job is already being tracked"
-        )
+        existing.status = request.status
+        db.commit()
+        db.refresh(existing)
+        return {
+            "id": str(existing.id),
+            "status": existing.status,
+            "message": "Updated existing application tracking"
+        }
 
+    # Create new tracking entry
     app_track = ApplicationTrack(
         user_id=request.user_id,
         listing_id=request.listing_id,
@@ -259,12 +267,18 @@ Guidelines:
 3. Highlight the unique value the candidate brings to this role.
 4. Use a confident but not arrogant tone.
 5. Do NOT include placeholder brackets like [Your Name] — use the candidate's actual name from the resume profile.
-6. Return ONLY the cover letter text, no extra commentary."""
+6. Return ONLY the cover letter text, no extra commentary.
+7. CRITICAL: DO NOT hallucinate or invent skills. If the JD requires a skill the candidate lacks, do not say they have it. Focus entirely on the true skills from the resume.
+
+"""
 
     try:
         response = _client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt,
+            config=genai.types.GenerateContentConfig(
+                temperature=0.0,
+            ),
         )
         cover_letter = response.text.strip()
     except Exception as e:
@@ -282,6 +296,54 @@ Guidelines:
         "applicationId": str(app_track.id),
         "coverLetter": cover_letter,
     }
+
+
+# ---------------------------------------------------------------------------
+# POST /applications/{app_id}/auto-fill — auto-fill using Playwright
+# ---------------------------------------------------------------------------
+class AutoFillRequest(BaseModel):
+    resume_profile: dict
+
+
+@router.post("/{app_id}/auto-fill")
+def auto_fill_application(
+    app_id: UUID,
+    request: AutoFillRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """
+    Launches a non-headless Playwright browser in the background to automatically
+    fill out an application form using heuristics from the user's resume profile.
+    It stops before submission, allowing the user to review and submit manually.
+    """
+    app_track = db.query(ApplicationTrack).filter(ApplicationTrack.id == app_id).first()
+    if not app_track:
+        raise HTTPException(status_code=404, detail="Tracked application not found")
+
+    listing = db.query(JobListing).filter(JobListing.id == app_track.listing_id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Associated job listing not found")
+        
+    if not listing.apply_url:
+        raise HTTPException(status_code=400, detail="Job listing has no apply URL")
+
+    # Add the playwright task to background tasks
+    background_tasks.add_task(
+        run_auto_fill_wrapper,
+        apply_url=str(listing.apply_url),
+        resume_profile=request.resume_profile,
+        cover_letter_text=app_track.cover_letter
+    )
+
+    return {"message": "Auto-fill browser session launched."}
+
+def run_auto_fill_wrapper(apply_url: str, resume_profile: dict, cover_letter_text: str | None):
+    # This runs the async playwright function in a new event loop since BackgroundTasks
+    # runs sync functions in a separate thread, and calling async functions directly from it
+    # without await can be tricky.
+    import asyncio
+    asyncio.run(run_auto_fill(apply_url, resume_profile, cover_letter_text))
 
 
 # ---------------------------------------------------------------------------

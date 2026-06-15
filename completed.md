@@ -37,6 +37,7 @@
 - [x] "Track" bookmark button on Job Cards
 - [x] "Generate Cover Letter" button on pipeline cards
 - [x] Cover letter modal with copy-to-clipboard
+- [x] Playwright-powered "⚡ Auto-Fill Application" heuristic form population using Resume profile.
 
 ### Feature 4: Analytics Dashboard
 - [x] Match score trends over time (bar chart)
@@ -55,8 +56,21 @@
 - [x] High-score detection service with `notified` flag to prevent duplicates
 
 ### Feature 6: Interview Prep
-- [x] AI-generated interview questions based on JD (8-10 behavioral/technical/situational)
-- [x] Company research briefs (overview, culture, recent news, interview tips, Glassdoor sentiment)
-- [x] Interview Prep tab with input form and dual-panel results
+- [x] Mock interview questions generator (Gemini AI + Job + Resume)
+- [x] Company research brief generator (Culture, Recent News, Glassdoor Sentiment)
 - [x] Interview API endpoints (`/interview/questions`, `/interview/company-brief`)
+- [x] Full-screen Interactive Interview Prep Modal
+- [x] Structured JSON parsing utility for LLM outputs
 
+### Phase 4: Bug Fixes & Refinements
+- [x] **Application Tracking Sync**: Applying externally automatically adds job to 'Applied' column in Pipeline
+- [x] **Hallucination Prevention**: Enforced `temperature=0.0` and strict anti-hallucination prompts across all Gemini features (scoring, cover letter, interview prep)
+- [x] **Job Source Diversification**: Added public API scraper `remotive.py` and fallback mocked responses for `indeed.py` and `glassdoor.py` to handle Cloudflare blocking
+- [x] **Project Documentation**: Created `context.md` for architecture overview and `skills.md` for technical requirements
+- [x] **UI/UX Modernization**: Overhauled typography (`Outfit` and `Inter`), implemented a premium Glassmorphic Indigo/Violet design system (`globals.css`), and completely refactored the layout with a sticky SaaS top navigation bar.
+- [x] **Component System**: Replaced 30+ raw inline SVGs with standard `lucide-react` icons across `page.tsx` and `JobCard.tsx` for visual consistency and maintainability.
+
+## 🚧 Upcoming / Pending
+- [ ] Migrate to a managed database (e.g. Supabase, Vercel Postgres)
+- [ ] Implement secure User Authentication (e.g. Clerk, NextAuth)
+- [ ] Add advanced proxies or Playwright logic to fully bypass Cloudflare on Indeed/Glassdoor

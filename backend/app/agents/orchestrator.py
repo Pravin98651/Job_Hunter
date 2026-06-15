@@ -6,6 +6,7 @@ from app.scrapers.linkedin import scrape_linkedin_jobs
 from app.scrapers.indeed import scrape_indeed_jobs
 from app.scrapers.glassdoor import scrape_glassdoor_jobs
 from app.scrapers.wellfound import scrape_wellfound_jobs
+from app.scrapers.remotive import scrape_remotive_jobs
 from app.agents.llm_scorer import score_job_listing
 from app.db.session import SessionLocal
 from app.models.job import JobListing, JobScore
@@ -29,6 +30,7 @@ async def scrape_jobs(state: AgentState):
         scrape_indeed_jobs(state["query"], state["location"], max_results=max_per_source),
         scrape_glassdoor_jobs(state["query"], state["location"], max_results=max_per_source),
         scrape_wellfound_jobs(state["query"], state["location"], max_results=max_per_source),
+        scrape_remotive_jobs(state["query"], state["location"], max_results=max_per_source),
         return_exceptions=True
     )
     
