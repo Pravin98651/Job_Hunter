@@ -269,7 +269,7 @@ function SectionCard({ icon, title, children }: { icon: React.ReactNode; title: 
 /* ════════════════════════ MAIN DASHBOARD ════════════════════════ */
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<"matches" | "preferences" | "pipeline">("matches");
+  const [activeTab, setActiveTab] = useState<"matches" | "preferences" | "pipeline" | "analytics" | "interview">("matches");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isScraping, setIsScraping] = useState(false);
@@ -300,6 +300,22 @@ export default function Dashboard() {
   const [coverLetterModal, setCoverLetterModal] = useState<TrackedApp | null>(null);
   const [generatedCoverLetter, setGeneratedCoverLetter] = useState<string | null>(null);
   const [isGeneratingCL, setIsGeneratingCL] = useState(false);
+
+  /* ── Analytics state ── */
+  const [scoreTrends, setScoreTrends] = useState<{date: string; avgScore: number; count: number}[]>([]);
+  const [skillGaps, setSkillGaps] = useState<{skill: string; count: number}[]>([]);
+  const [pipelineStats, setPipelineStats] = useState<{bookmarked: number; applied: number; interviewing: number; rejected: number; offer: number; total: number; conversionRate: number} | null>(null);
+  const [sourceStats, setSourceStats] = useState<{source: string; count: number}[]>([]);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+
+  /* ── Interview Prep state ── */
+  const [interviewQuestions, setInterviewQuestions] = useState<{question: string; type: string; tip: string}[]>([]);
+  const [companyBrief, setCompanyBrief] = useState<{overview: string; culture: string; recentNews: string[]; interviewTips: string[]; glassdoorSentiment: string} | null>(null);
+  const [isLoadingInterview, setIsLoadingInterview] = useState(false);
+  const [isLoadingBrief, setIsLoadingBrief] = useState(false);
+  const [interviewJobTitle, setInterviewJobTitle] = useState("");
+  const [interviewCompany, setInterviewCompany] = useState("");
+  const [interviewJobDesc, setInterviewJobDesc] = useState("");
 
   /* ── Toast helper ── */
   const showToast = useCallback((message: string, type: Toast["type"] = "success") => {
@@ -577,6 +593,86 @@ export default function Dashboard() {
     if (activeTab === "pipeline") fetchTrackedApps();
   }, [activeTab, fetchTrackedApps]);
 
+  /* ── Analytics handlers ── */
+  const fetchAnalytics = useCallback(async () => {
+    setIsLoadingAnalytics(true);
+    try {
+      const [trendsRes, gapsRes, statsRes, sourcesRes] = await Promise.all([
+        fetch("/api/analytics/score-trends"),
+        fetch("/api/analytics/skill-gaps"),
+        fetch("/api/analytics/pipeline-stats"),
+        fetch("/api/analytics/sources"),
+      ]);
+      setScoreTrends(await trendsRes.json());
+      setSkillGaps(await gapsRes.json());
+      setPipelineStats(await statsRes.json());
+      setSourceStats(await sourcesRes.json());
+    } catch (err) {
+      console.error("Failed to fetch analytics:", err);
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "analytics") fetchAnalytics();
+  }, [activeTab, fetchAnalytics]);
+
+  /* ── Interview Prep handlers ── */
+  const handleGenerateQuestions = useCallback(async () => {
+    if (!interviewJobTitle || !interviewCompany) {
+      showToast("Enter a job title and company first", "error");
+      return;
+    }
+    setIsLoadingInterview(true);
+    setInterviewQuestions([]);
+    try {
+      const res = await fetch("/api/interview/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_title: interviewJobTitle,
+          company: interviewCompany,
+          job_description: interviewJobDesc || `${interviewJobTitle} at ${interviewCompany}`,
+          resume_profile: resumeProfile || {},
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed");
+      setInterviewQuestions(data.questions);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Failed", "error");
+    } finally {
+      setIsLoadingInterview(false);
+    }
+  }, [interviewJobTitle, interviewCompany, interviewJobDesc, resumeProfile, showToast]);
+
+  const handleGenerateBrief = useCallback(async () => {
+    if (!interviewCompany) {
+      showToast("Enter a company name first", "error");
+      return;
+    }
+    setIsLoadingBrief(true);
+    setCompanyBrief(null);
+    try {
+      const res = await fetch("/api/interview/company-brief", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company: interviewCompany,
+          job_title: interviewJobTitle || "Software Engineer",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed");
+      setCompanyBrief(data.brief);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Failed", "error");
+    } finally {
+      setIsLoadingBrief(false);
+    }
+  }, [interviewCompany, interviewJobTitle, showToast]);
+
   /* ── Derived data ── */
   const filteredJobs = jobs.filter((j) => j.matchScore >= filterMin);
   const avgScore = jobs.length ? Math.round(jobs.reduce((a, j) => a + j.matchScore, 0) / jobs.length) : 0;
@@ -661,27 +757,35 @@ export default function Dashboard() {
           {/* Tab switcher */}
           <div className="flex justify-center">
             <div className="flex bg-slate-100/80 dark:bg-slate-800/50 backdrop-blur-xl rounded-full p-1 border border-slate-200/50 dark:border-white/[0.06] shadow-sm">
-              {(["matches", "pipeline", "preferences"] as const).map((tab) => (
+              {(["matches", "pipeline", "analytics", "interview", "preferences"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`relative px-5 sm:px-7 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${
+                  className={`relative px-3 sm:px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${
                     activeTab === tab
                       ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-md"
                       : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                   }`}
                 >
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-1.5">
                     {tab === "matches" && (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                     )}
                     {tab === "pipeline" && (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
                     )}
+                    {tab === "analytics" && (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    )}
+                    {tab === "interview" && (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                    )}
                     {tab === "preferences" && (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     )}
-                    {tab === "matches" ? "Matches" : tab === "pipeline" ? `Pipeline${trackedApps.length ? ` (${trackedApps.length})` : ""}` : "Preferences"}
+                    <span className="hidden sm:inline">
+                      {tab === "matches" ? "Matches" : tab === "pipeline" ? "Pipeline" : tab === "analytics" ? "Analytics" : tab === "interview" ? "Interview" : "Preferences"}
+                    </span>
                   </span>
                 </button>
               ))}
@@ -1294,6 +1398,252 @@ export default function Dashboard() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ══════════════════════ ANALYTICS TAB ══════════════════════ */}
+        {activeTab === "analytics" && (
+          <div className="animate-[fadeUp_0.5s_ease-out]">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">Analytics Dashboard</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Track trends, identify skill gaps, and monitor your application pipeline.</p>
+            </div>
+
+            {isLoadingAnalytics ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Pipeline Funnel + Sources Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Pipeline Stats */}
+                  <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
+                    <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                      Pipeline Funnel
+                    </h3>
+                    {pipelineStats ? (
+                      <div className="space-y-3">
+                        {[
+                          { label: "Bookmarked", value: pipelineStats.bookmarked, color: "bg-slate-400" },
+                          { label: "Applied", value: pipelineStats.applied, color: "bg-blue-500" },
+                          { label: "Interviewing", value: pipelineStats.interviewing, color: "bg-amber-500" },
+                          { label: "Offer", value: pipelineStats.offer, color: "bg-emerald-500" },
+                          { label: "Rejected", value: pipelineStats.rejected, color: "bg-rose-400" },
+                        ].map((s) => (
+                          <div key={s.label} className="flex items-center gap-3">
+                            <span className="text-xs font-semibold text-slate-500 w-24">{s.label}</span>
+                            <div className="flex-1 h-5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${s.color} rounded-full transition-all duration-500`}
+                                style={{ width: `${pipelineStats.total ? (s.value / pipelineStats.total) * 100 : 0}%`, minWidth: s.value > 0 ? '8px' : '0' }}
+                              />
+                            </div>
+                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300 w-8 text-right">{s.value}</span>
+                          </div>
+                        ))}
+                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                          <span className="text-xs font-semibold text-slate-400">Conversion Rate</span>
+                          <span className="text-lg font-black text-blue-600 dark:text-blue-400">{pipelineStats.conversionRate}%</span>
+                        </div>
+                      </div>
+                    ) : <p className="text-sm text-slate-500">No pipeline data yet. Track some jobs first.</p>}
+                  </div>
+
+                  {/* Job Sources */}
+                  <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
+                    <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" /></svg>
+                      Job Sources
+                    </h3>
+                    {sourceStats.length > 0 ? (
+                      <div className="space-y-3">
+                        {sourceStats.map((s, i) => {
+                          const colors = ["bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500", "bg-rose-500"];
+                          const maxCount = Math.max(...sourceStats.map(x => x.count));
+                          return (
+                            <div key={s.source} className="flex items-center gap-3">
+                              <span className="text-xs font-semibold text-slate-500 capitalize w-24">{s.source}</span>
+                              <div className="flex-1 h-5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div className={`h-full ${colors[i % colors.length]} rounded-full transition-all duration-500`} style={{ width: `${(s.count / maxCount) * 100}%` }} />
+                              </div>
+                              <span className="text-sm font-bold text-slate-700 dark:text-slate-300 w-8 text-right">{s.count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : <p className="text-sm text-slate-500">No source data yet.</p>}
+                  </div>
+                </div>
+
+                {/* Skill Gaps */}
+                <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                    Top Skill Gaps — Learn These Next
+                  </h3>
+                  <p className="text-xs text-slate-400 mb-4">Skills most frequently requested by employers but missing from your resume.</p>
+                  {skillGaps.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {skillGaps.slice(0, 20).map((g, i) => (
+                        <span key={g.skill} className={`px-3 py-1.5 rounded-xl text-sm font-semibold border ${
+                          i < 3 ? "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20" :
+                          i < 7 ? "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20" :
+                          "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"
+                        }`}>
+                          {g.skill} <span className="text-xs opacity-60">({g.count})</span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : <p className="text-sm text-slate-500">No skill gap data yet. Run some job searches first.</p>}
+                </div>
+
+                {/* Score Trends */}
+                <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
+                    Match Score Trends
+                  </h3>
+                  {scoreTrends.length > 0 ? (
+                    <div className="flex items-end gap-2 h-32">
+                      {scoreTrends.map((t) => (
+                        <div key={t.date} className="flex-1 flex flex-col items-center gap-1 group">
+                          <span className="text-[10px] font-bold text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">{t.avgScore}%</span>
+                          <div
+                            className="w-full bg-blue-500 dark:bg-blue-400 rounded-t-lg transition-all duration-500 hover:bg-blue-600 cursor-pointer"
+                            style={{ height: `${t.avgScore}%` }}
+                            title={`${t.date}: ${t.avgScore}% avg (${t.count} jobs)`}
+                          />
+                          <span className="text-[9px] text-slate-400 truncate w-full text-center">{t.date.slice(5)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-sm text-slate-500">No trend data yet.</p>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════ INTERVIEW PREP TAB ══════════════════════ */}
+        {activeTab === "interview" && (
+          <div className="animate-[fadeUp_0.5s_ease-out]">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">Interview Prep</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Generate AI-powered interview questions and research your target company.</p>
+            </div>
+
+            {/* Input form */}
+            <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Job Title</label>
+                  <input
+                    type="text"
+                    value={interviewJobTitle}
+                    onChange={(e) => setInterviewJobTitle(e.target.value)}
+                    placeholder="e.g. Senior AI Engineer"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Company</label>
+                  <input
+                    type="text"
+                    value={interviewCompany}
+                    onChange={(e) => setInterviewCompany(e.target.value)}
+                    placeholder="e.g. Google"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/30"
+                  />
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Job Description (optional, improves results)</label>
+                <textarea
+                  value={interviewJobDesc}
+                  onChange={(e) => setInterviewJobDesc(e.target.value)}
+                  placeholder="Paste the full job description here for best results..."
+                  rows={3}
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleGenerateQuestions}
+                  disabled={isLoadingInterview}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-slate-900 text-white hover:bg-blue-600 dark:bg-white dark:text-slate-900 dark:hover:bg-blue-500 dark:hover:text-white transition-all disabled:opacity-50"
+                >
+                  {isLoadingInterview ? (
+                    <><div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Generating...</>
+                  ) : (
+                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Generate Questions</>
+                  )}
+                </button>
+                <button
+                  onClick={handleGenerateBrief}
+                  disabled={isLoadingBrief}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-500/10 dark:hover:text-blue-400 transition-all disabled:opacity-50"
+                >
+                  {isLoadingBrief ? (
+                    <><div className="w-4 h-4 rounded-full border-2 border-slate-400/30 border-t-slate-400 animate-spin" /> Researching...</>
+                  ) : (
+                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg> Company Brief</>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Interview Questions */}
+              {interviewQuestions.length > 0 && (
+                <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Likely Interview Questions</h3>
+                  <div className="space-y-4">
+                    {interviewQuestions.map((q, i) => (
+                      <div key={i} className="relative pl-4 border-l-2 border-blue-200 dark:border-blue-800">
+                        <span className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded-md mb-1.5 ${
+                          q.type === "technical" ? "bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400" :
+                          q.type === "behavioral" ? "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400" :
+                          "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400"
+                        }`}>{q.type}</span>
+                        <p className="text-sm font-semibold text-slate-800 dark:text-white mb-1">{q.question}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 italic">💡 {q.tip}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Company Brief */}
+              {companyBrief && (
+                <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Company Research Brief — {interviewCompany}</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-xs font-bold text-blue-500 uppercase mb-1">Overview</h4>
+                      <p className="text-sm text-slate-700 dark:text-slate-300">{companyBrief.overview}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-emerald-500 uppercase mb-1">Culture</h4>
+                      <p className="text-sm text-slate-700 dark:text-slate-300">{companyBrief.culture}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-violet-500 uppercase mb-1">Recent News</h4>
+                      <ul className="space-y-1">{companyBrief.recentNews.map((n, i) => <li key={i} className="text-sm text-slate-600 dark:text-slate-400 flex gap-2"><span>•</span>{n}</li>)}</ul>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-amber-500 uppercase mb-1">Interview Tips</h4>
+                      <ul className="space-y-1">{companyBrief.interviewTips.map((t, i) => <li key={i} className="text-sm text-slate-600 dark:text-slate-400 flex gap-2"><span>💡</span>{t}</li>)}</ul>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-rose-500 uppercase mb-1">Glassdoor Sentiment</h4>
+                      <p className="text-sm text-slate-700 dark:text-slate-300">{companyBrief.glassdoorSentiment}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

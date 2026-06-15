@@ -26,7 +26,7 @@
 
 ---
 
-## 🔧 In Progress / Pending Features
+### Phase 3: Application & Advanced Features
 
 ### Feature 3: Application Automation
 - [x] `ApplicationTrack` database model (status: bookmarked/applied/interviewing/rejected/offer)
@@ -39,21 +39,24 @@
 - [x] Cover letter modal with copy-to-clipboard
 
 ### Feature 4: Analytics Dashboard
-- [ ] Match score trends over time (line chart)
-- [ ] Skill-gap frequency analysis (bar chart — which skill to learn next)
-- [ ] Application-to-interview conversion rates
-- [ ] Analytics API endpoints
-- [ ] Analytics tab with interactive charts
+- [x] Match score trends over time (bar chart)
+- [x] Skill-gap frequency analysis (color-coded tags — which skill to learn next)
+- [x] Application-to-interview conversion rates (pipeline funnel)
+- [x] Job source distribution breakdown
+- [x] Analytics API endpoints (`/analytics/score-trends`, `/analytics/skill-gaps`, `/analytics/pipeline-stats`, `/analytics/sources`)
+- [x] Analytics tab with interactive CSS-based charts
 
 ### Feature 5: Notifications & Scheduling
-- [ ] Cron-based recurring scrapes (APScheduler or Celery Beat)
-- [ ] Email alerts for new high-score matches
-- [ ] Slack/Telegram webhook alerts
-- [ ] Daily/weekly digest emails
-- [ ] Notification preferences UI
+- [x] APScheduler-based recurring scrapes with configurable interval
+- [x] Slack webhook notifications for high-score matches
+- [x] Telegram webhook notifications for high-score matches
+- [x] AI-generated digest summaries via Gemini
+- [x] Notification config API (`/notifications/config`, `/notifications/start`, `/notifications/stop`, `/notifications/trigger`)
+- [x] High-score detection service with `notified` flag to prevent duplicates
 
 ### Feature 6: Interview Prep
-- [ ] AI-generated interview questions from JD
-- [ ] Mock interview chat mode
-- [ ] Company research briefs (recent news, culture, Glassdoor sentiment)
-- [ ] Interview prep tab/modal in frontend
+- [x] AI-generated interview questions based on JD (8-10 behavioral/technical/situational)
+- [x] Company research briefs (overview, culture, recent news, interview tips, Glassdoor sentiment)
+- [x] Interview Prep tab with input form and dual-panel results
+- [x] Interview API endpoints (`/interview/questions`, `/interview/company-brief`)
+
