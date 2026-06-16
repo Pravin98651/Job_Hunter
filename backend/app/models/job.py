@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Boolean, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Boolean, Text, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.sql import func
@@ -21,6 +21,8 @@ class JobListing(Base):
     embedding = Column(Vector(384))
     scraped_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
+
+Index("ix_job_listings_embedding", JobListing.embedding, postgresql_using="hnsw", postgresql_with={"m": 16, "ef_construction": 64}, postgresql_ops={"embedding": "vector_cosine_ops"})
 
 
 class JobScore(Base):

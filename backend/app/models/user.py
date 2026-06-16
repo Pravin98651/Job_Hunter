@@ -31,3 +31,19 @@ class UserDocument(Base):
     filename = Column(String(255))
     file_data = Column(LargeBinary, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class NotificationSettings(Base):
+    __tablename__ = "notification_settings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    enabled = Column(Boolean, default=False)
+    scrape_interval_hours = Column(Integer, default=6)
+    min_score_threshold = Column(Integer, default=80)
+    slack_webhook = Column(String(1024), nullable=True)
+    telegram_webhook = Column(String(1024), nullable=True)
+    email = Column(String(255), nullable=True)
+    scrape_query = Column(String(255), default="AI Engineer")
+    scrape_location = Column(String(255), default="Remote")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

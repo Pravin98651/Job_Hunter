@@ -18,18 +18,12 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.application import ApplicationStatus, ApplicationTrack
 from app.models.job import JobListing, JobScore
+from app.models.user import UserDocument
 from app.services.auto_apply import run_auto_fill
+from app.api.deps import get_current_user_id
 
-# ---------------------------------------------------------------------------
-# Gemini client (same pattern as resume.py)
-# ---------------------------------------------------------------------------
-try:
-    from google import genai
-
-    _api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
-    _client = genai.Client(api_key=_api_key) if _api_key else None
-except ImportError:
-    _client = None
+from app.core.llm import client as _client
+import logging
 
 router = APIRouter()
 
@@ -39,7 +33,6 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 class TrackApplicationRequest(BaseModel):
     listing_id: str
-    user_id: str
     status: ApplicationStatus = ApplicationStatus.bookmarked
 
 
@@ -56,7 +49,7 @@ class CoverLetterRequest(BaseModel):
 # ---------------------------------------------------------------------------
 @router.get("/")
 def list_applications(
-    user_id: str | None = None,
+    current_user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """
@@ -73,9 +66,7 @@ def list_applications(
         )
     )
 
-    if user_id:
-        query = query.filter(ApplicationTrack.user_id == user_id)
-
+    query = query.filter(ApplicationTrack.user_id == current_user_id)
     query = query.order_by(ApplicationTrack.created_at.desc())
 
     results = []
@@ -115,6 +106,7 @@ def list_applications(
 @router.post("/", status_code=201)
 def track_application(
     request: TrackApplicationRequest,
+    current_user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Create a new application tracking entry for a job listing."""
@@ -126,7 +118,10 @@ def track_application(
     # Prevent duplicate tracking or act as upsert
     existing = (
         db.query(ApplicationTrack)
-        .filter(ApplicationTrack.listing_id == request.listing_id)
+        .filter(
+            ApplicationTrack.listing_id == request.listing_id,
+            ApplicationTrack.user_id == current_user_id
+        )
         .first()
     )
     if existing:
@@ -141,7 +136,7 @@ def track_application(
 
     # Create new tracking entry
     app_track = ApplicationTrack(
-        user_id=request.user_id,
+        user_id=current_user_id,
         listing_id=request.listing_id,
         status=request.status,
     )
@@ -164,11 +159,12 @@ def track_application(
 def update_status(
     app_id: UUID,
     request: UpdateStatusRequest,
+    current_user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Update the status of a tracked application."""
     app_track = (
-        db.query(ApplicationTrack).filter(ApplicationTrack.id == app_id).first()
+        db.query(ApplicationTrack).filter(ApplicationTrack.id == app_id, ApplicationTrack.user_id == current_user_id).first()
     )
     if not app_track:
         raise HTTPException(status_code=404, detail="Tracked application not found")
@@ -198,11 +194,12 @@ def update_status(
 @router.delete("/{app_id}", status_code=204)
 def delete_application(
     app_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Stop tracking a job application."""
     app_track = (
-        db.query(ApplicationTrack).filter(ApplicationTrack.id == app_id).first()
+        db.query(ApplicationTrack).filter(ApplicationTrack.id == app_id, ApplicationTrack.user_id == current_user_id).first()
     )
     if not app_track:
         raise HTTPException(status_code=404, detail="Tracked application not found")
@@ -219,6 +216,7 @@ def delete_application(
 def generate_cover_letter(
     app_id: UUID,
     request: CoverLetterRequest,
+    current_user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """
@@ -233,7 +231,7 @@ def generate_cover_letter(
 
     # Fetch the tracked application and its job listing
     app_track = (
-        db.query(ApplicationTrack).filter(ApplicationTrack.id == app_id).first()
+        db.query(ApplicationTrack).filter(ApplicationTrack.id == app_id, ApplicationTrack.user_id == current_user_id).first()
     )
     if not app_track:
         raise HTTPException(status_code=404, detail="Tracked application not found")
@@ -276,15 +274,13 @@ Guidelines:
         response = _client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                temperature=0.0,
-            ),
         )
         cover_letter = response.text.strip()
     except Exception as e:
+        logging.error(f"Gemini API call failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=502,
-            detail=f"Gemini API call failed: {str(e)}",
+            detail="An internal error occurred while generating the cover letter.",
         )
 
     # Persist to the database
@@ -310,6 +306,7 @@ def auto_fill_application(
     app_id: UUID,
     request: AutoFillRequest,
     background_tasks: BackgroundTasks,
+    current_user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """
@@ -317,7 +314,7 @@ def auto_fill_application(
     fill out an application form using heuristics from the user's resume profile.
     It stops before submission, allowing the user to review and submit manually.
     """
-    app_track = db.query(ApplicationTrack).filter(ApplicationTrack.id == app_id).first()
+    app_track = db.query(ApplicationTrack).filter(ApplicationTrack.id == app_id, ApplicationTrack.user_id == current_user_id).first()
     if not app_track:
         raise HTTPException(status_code=404, detail="Tracked application not found")
 
@@ -328,22 +325,27 @@ def auto_fill_application(
     if not listing.apply_url:
         raise HTTPException(status_code=400, detail="Job listing has no apply URL")
 
+    # Fetch the resume bytes if available
+    doc = db.query(UserDocument).filter(UserDocument.user_id == app_track.user_id).first() if app_track.user_id else None
+    resume_bytes = doc.file_data if doc else None
+
     # Add the playwright task to background tasks
     background_tasks.add_task(
         run_auto_fill_wrapper,
         apply_url=str(listing.apply_url),
         resume_profile=request.resume_profile,
-        cover_letter_text=app_track.cover_letter
+        cover_letter_text=app_track.cover_letter,
+        resume_bytes=resume_bytes
     )
 
     return {"message": "Auto-fill browser session launched."}
 
-def run_auto_fill_wrapper(apply_url: str, resume_profile: dict, cover_letter_text: str | None):
+def run_auto_fill_wrapper(apply_url: str, resume_profile: dict, cover_letter_text: str | None, resume_bytes: bytes | None):
     # This runs the async playwright function in a new event loop since BackgroundTasks
     # runs sync functions in a separate thread, and calling async functions directly from it
     # without await can be tricky.
     import asyncio
-    asyncio.run(run_auto_fill(apply_url, resume_profile, cover_letter_text))
+    asyncio.run(run_auto_fill(apply_url, resume_profile, cover_letter_text, resume_bytes))
 
 
 # ---------------------------------------------------------------------------

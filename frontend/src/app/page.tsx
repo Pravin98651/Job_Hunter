@@ -2,8 +2,23 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { JobCard } from "@/components/JobCard";
 import { Search, MapPin, Briefcase, LayoutDashboard, BarChart3, Presentation, Settings, CheckCircle2, XCircle, AlertCircle, Loader2, Sparkles, Filter, Bookmark, Play, CheckCircle, ExternalLink, CalendarDays, LineChart, FileText, UploadCloud, ChevronRight, Check, Target } from "lucide-react";
+import { TagInput } from "@/components/ui/TagInput";
+import { Toggle } from "@/components/ui/Toggle";
+import { SectionCard } from "@/components/ui/SectionCard";
 
 /* ───────────────────────────── Types ───────────────────────────── */
+
+async function apiFetch(url: string, options: RequestInit = {}) {
+  const headers = new Headers(options.headers || {});
+  let id = "";
+  if (typeof window !== "undefined") {
+    id = localStorage.getItem("jobhunt_session_id") || "";
+  }
+  if (id) {
+    headers.set("X-User-ID", id);
+  }
+  return fetch(url, { ...options, headers });
+}
 
 interface Job {
   id: string;
@@ -142,6 +157,14 @@ function loadPreferences(): Preferences {
 function savePreferences(prefs: Preferences) {
   if (typeof window === "undefined") return;
   localStorage.setItem("jobhunt_preferences", JSON.stringify(prefs));
+  const id = localStorage.getItem("jobhunt_session_id");
+  if (id) {
+    apiFetch(`/api/users/me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preferences: prefs })
+    }).catch(e => console.error("Error saving preferences to cloud", e));
+  }
 }
 
 function loadSearchCount(): number {
@@ -167,105 +190,17 @@ function loadResumeProfile(): ResumeProfile | null {
 function saveResumeProfile(profile: ResumeProfile) {
   if (typeof window === "undefined") return;
   localStorage.setItem("jobhunt_resume_profile", JSON.stringify(profile));
+  const id = localStorage.getItem("jobhunt_session_id");
+  if (id) {
+    apiFetch(`/api/users/me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resume_profile: profile })
+    }).catch(e => console.error("Error saving profile to cloud", e));
+  }
 }
 
-/* ──────────────────────── Tag Input Component ──────────────────── */
 
-function TagInput({
-  tags,
-  onChange,
-  placeholder,
-}: {
-  tags: string[];
-  onChange: (t: string[]) => void;
-  placeholder: string;
-}) {
-  const [input, setInput] = useState("");
-
-  const add = () => {
-    const v = input.trim();
-    if (v && !tags.includes(v)) {
-      onChange([...tags, v]);
-    }
-    setInput("");
-  };
-
-  return (
-    <div>
-      <div className="flex flex-wrap gap-2 mb-3">
-        {tags.map((t) => (
-          <span
-            key={t}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300 border border-blue-200/60 dark:border-blue-500/20 transition-all hover:border-blue-400 dark:hover:border-blue-400/40"
-          >
-            {t}
-            <button
-              type="button"
-              onClick={() => onChange(tags.filter((x) => x !== t))}
-              className="ml-0.5 hover:text-red-500 transition-colors"
-            >
-              <XCircle className="w-3 h-3" />
-            </button>
-          </span>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
-          placeholder={placeholder}
-          className="flex-1 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200/60 dark:border-slate-700/50 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 rounded-xl px-4 py-2.5 text-sm font-medium transition-all outline-none"
-        />
-        <button
-          type="button"
-          onClick={add}
-          className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700/50 transition-all"
-        >
-          Add
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ──────────────────────── Toggle Component ─────────────────────── */
-
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <label className="flex items-center justify-between cursor-pointer group">
-      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${checked ? "bg-blue-500" : "bg-slate-200 dark:bg-slate-700"}`}
-      >
-        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${checked ? "translate-x-6" : "translate-x-1"}`} />
-      </button>
-    </label>
-  );
-}
-
-/* ───────────────────── Section Card Component ──────────────────── */
-
-function SectionCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow duration-300 relative overflow-hidden group">
-      <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent dark:from-white/[0.03] pointer-events-none" />
-      <div className="relative z-10">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:to-indigo-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 border border-blue-200/40 dark:border-blue-500/20">
-            {icon}
-          </div>
-          <h3 className="text-base font-bold text-slate-800 dark:text-white tracking-tight">{title}</h3>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 /* ════════════════════════ MAIN DASHBOARD ════════════════════════ */
 
@@ -325,24 +260,67 @@ export default function Dashboard() {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   }, []);
 
-  /* ── Load preferences + search count + resume from localStorage ── */
+  /* ── Load preferences + profile from Cloud (PostgreSQL) ── */
   useEffect(() => {
-    const loaded = loadPreferences();
-    setPrefs(loaded);
-    setSearchQuery(loaded.targetTitle);
-    setSearchLocation(loaded.locations[0] || "Remote");
-    setSearchCount(loadSearchCount());
-    const savedResume = loadResumeProfile();
-    if (savedResume) {
-      setResumeProfile(savedResume);
-      setResumeFileName(localStorage.getItem("jobhunt_resume_filename") || "resume.pdf");
-    }
-    setPrefsLoaded(true);
+    const initializeSession = async () => {
+      let id = localStorage.getItem("jobhunt_session_id");
+      if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem("jobhunt_session_id", id);
+        // Create guest user on backend
+        try {
+          await apiFetch("/api/users/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id })
+          });
+        } catch (e) { console.error("Error creating guest user", e); }
+      }
+
+      let res = await apiFetch(`/api/users/me`);
+      if (!res.ok) {
+        // If the user doesn't exist on the backend yet, create it.
+        try {
+          await apiFetch("/api/users/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id })
+          });
+          res = await apiFetch(`/api/users/me`);
+        } catch (e) {
+          console.error("Error creating guest user", e);
+        }
+      }
+
+      try {
+        if (res.ok) {
+          const userData = await res.json();
+          if (userData.preferences) {
+            setPrefs({ ...DEFAULT_PREFERENCES, ...userData.preferences });
+            setSearchQuery(userData.preferences.targetTitle || "AI Engineer");
+            setSearchLocation(userData.preferences.locations?.[0] || "Remote");
+          } else {
+            setSearchQuery(DEFAULT_PREFERENCES.targetTitle);
+            setSearchLocation(DEFAULT_PREFERENCES.locations[0]);
+          }
+          if (userData.resume_profile) {
+            setResumeProfile(userData.resume_profile);
+            setResumeFileName(localStorage.getItem("jobhunt_resume_filename") || "resume.pdf");
+          }
+        }
+      } catch (e) {
+        console.error("Error fetching cloud user data", e);
+      }
+      setSearchCount(loadSearchCount()); // search count remains local for now
+      setPrefsLoaded(true);
+    };
+
+    initializeSession();
   }, []);
 
   /* ── Fetch jobs on mount ── */
   useEffect(() => {
-    fetch("/api/jobs/")
+    apiFetch("/api/jobs/")
       .then((res) => res.json())
       .then((data) => { setJobs(data); setIsLoading(false); })
       .catch((err) => { console.error("Failed to fetch jobs:", err); setIsLoading(false); });
@@ -354,13 +332,12 @@ export default function Dashboard() {
     const location = searchLocation.trim() || prefs.locations[0] || "Remote";
 
     setIsScraping(true);
-    fetch("/api/jobs/search", {
+    apiFetch("/api/jobs/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         query,
         location,
-        user_id: "00000000-0000-0000-0000-000000000000",
         user_profile: {
           title: prefs.targetTitle,
           skills: prefs.mustHaveSkills,
@@ -375,7 +352,7 @@ export default function Dashboard() {
         const newCount = incrementSearchCount();
         setSearchCount(newCount);
         // Refresh jobs
-        return fetch("/api/jobs/").then((r) => r.json()).then((d) => setJobs(d));
+        return apiFetch("/api/jobs/").then((r) => r.json()).then((d) => setJobs(d));
       })
       .catch((err) => {
         console.error(err);
@@ -413,9 +390,13 @@ export default function Dashboard() {
 
     const formData = new FormData();
     formData.append("file", file);
+    const userId = localStorage.getItem("jobhunt_session_id");
+    if (userId) {
+      formData.append("user_id", userId);
+    }
 
     try {
-      const res = await fetch("/api/resume/upload", {
+      const res = await apiFetch("/api/resume/upload", {
         method: "POST",
         body: formData,
       });
@@ -473,7 +454,7 @@ export default function Dashboard() {
     setIsOptimizing(true);
     
     try {
-      const res = await fetch("/api/resume/optimize", {
+      const res = await apiFetch("/api/resume/optimize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -498,7 +479,7 @@ export default function Dashboard() {
   const fetchTrackedApps = useCallback(async () => {
     setIsLoadingPipeline(true);
     try {
-      const res = await fetch("/api/applications/");
+      const res = await apiFetch("/api/applications/");
       const data = await res.json();
       setTrackedApps(data);
     } catch (err) {
@@ -510,12 +491,11 @@ export default function Dashboard() {
 
   const handleTrackJob = useCallback(async (job: Job) => {
     try {
-      const res = await fetch("/api/applications/", {
+      const res = await apiFetch("/api/applications/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           listing_id: job.id,
-          user_id: "00000000-0000-0000-0000-000000000000",
           status: "bookmarked",
         }),
       });
@@ -534,12 +514,11 @@ export default function Dashboard() {
   const handleApplyJob = useCallback(async (job: Job) => {
     try {
       // Create or update status to 'applied'
-      const res = await fetch("/api/applications/", {
+      const res = await apiFetch("/api/applications/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           listing_id: job.id,
-          user_id: "00000000-0000-0000-0000-000000000000",
           status: "applied",
         }),
       });
@@ -562,7 +541,7 @@ export default function Dashboard() {
 
   const handleUpdateStatus = useCallback(async (appId: string, newStatus: AppStatus) => {
     try {
-      const res = await fetch(`/api/applications/${appId}/status`, {
+      const res = await apiFetch(`/api/applications/${appId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
@@ -578,7 +557,7 @@ export default function Dashboard() {
 
   const handleRemoveTrack = useCallback(async (appId: string) => {
     try {
-      await fetch(`/api/applications/${appId}`, { method: "DELETE" });
+      await apiFetch(`/api/applications/${appId}`, { method: "DELETE" });
       setTrackedApps((prev) => prev.filter((a) => a.applicationId !== appId));
       showToast("Removed from pipeline", "info");
     } catch {
@@ -593,7 +572,7 @@ export default function Dashboard() {
     }
     showToast("Launching browser for Auto-Fill... Please wait.", "success");
     try {
-      const res = await fetch(`/api/applications/${app.applicationId}/auto-fill`, {
+      const res = await apiFetch(`/api/applications/${app.applicationId}/auto-fill`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resume_profile: resumeProfile })
@@ -616,7 +595,7 @@ export default function Dashboard() {
 
     setIsGeneratingCL(true);
     try {
-      const res = await fetch(`/api/applications/${app.applicationId}/cover-letter`, {
+      const res = await apiFetch(`/api/applications/${app.applicationId}/cover-letter`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resume_profile: resumeProfile }),
@@ -637,20 +616,15 @@ export default function Dashboard() {
     }
   }, [resumeProfile, showToast]);
 
-  // Fetch pipeline data when switching to pipeline tab
-  useEffect(() => {
-    if (activeTab === "pipeline") fetchTrackedApps();
-  }, [activeTab, fetchTrackedApps]);
-
-  /* ── Analytics handlers ── */
+  // Pipeline data is fetched when clicking the tab now.
   const fetchAnalytics = useCallback(async () => {
     setIsLoadingAnalytics(true);
     try {
       const [trendsRes, gapsRes, statsRes, sourcesRes] = await Promise.all([
-        fetch("/api/analytics/score-trends"),
-        fetch("/api/analytics/skill-gaps"),
-        fetch("/api/analytics/pipeline-stats"),
-        fetch("/api/analytics/sources"),
+        apiFetch("/api/analytics/score-trends"),
+        apiFetch("/api/analytics/skill-gaps"),
+        apiFetch("/api/analytics/pipeline-stats"),
+        apiFetch("/api/analytics/sources"),
       ]);
       setScoreTrends(await trendsRes.json());
       setSkillGaps(await gapsRes.json());
@@ -662,10 +636,7 @@ export default function Dashboard() {
       setIsLoadingAnalytics(false);
     }
   }, []);
-
-  useEffect(() => {
-    if (activeTab === "analytics") fetchAnalytics();
-  }, [activeTab, fetchAnalytics]);
+  // Analytics data is fetched when clicking the tab now.
 
   /* ── Interview Prep handlers ── */
   const handleGenerateQuestions = useCallback(async () => {
@@ -676,7 +647,7 @@ export default function Dashboard() {
     setIsLoadingInterview(true);
     setInterviewQuestions([]);
     try {
-      const res = await fetch("/api/interview/questions", {
+      const res = await apiFetch("/api/interview/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -704,7 +675,7 @@ export default function Dashboard() {
     setIsLoadingBrief(true);
     setCompanyBrief(null);
     try {
-      const res = await fetch("/api/interview/company-brief", {
+      const res = await apiFetch("/api/interview/company-brief", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -780,7 +751,11 @@ export default function Dashboard() {
             {(["matches", "pipeline", "analytics", "interview", "preferences"] as const).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => {
+                  setActiveTab(tab);
+                  if (tab === "pipeline") fetchTrackedApps();
+                  if (tab === "analytics") fetchAnalytics();
+                }}
                 className={`relative px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                   activeTab === tab
                     ? "bg-background text-foreground shadow-sm ring-1 ring-border"

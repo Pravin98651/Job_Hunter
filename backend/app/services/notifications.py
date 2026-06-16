@@ -9,8 +9,11 @@ Provides:
 
 import os
 import json
+import socket
+from urllib.parse import urlparse
 from datetime import datetime
 from typing import Optional
+from fastapi import HTTPException
 
 from app.core.config import settings
 from app.db.session import SessionLocal
@@ -25,20 +28,40 @@ except ImportError:
     _client = None
 
 
-def get_high_score_jobs(min_score: int = 80, limit: int = 10) -> list[dict]:
+def validate_webhook_url(url: str):
+    """Validate webhook URL to prevent SSRF attacks."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Invalid webhook URL scheme.")
+        
+    hostname = parsed.hostname
+    if not hostname:
+        raise HTTPException(status_code=400, detail="Invalid webhook URL.")
+
+    # Prevent loopback or local network addresses
+    try:
+        ip = socket.gethostbyname(hostname)
+        if ip.startswith("127.") or ip.startswith("10.") or ip.startswith("192.168.") or ip == "0.0.0.0":
+            raise HTTPException(status_code=400, detail="Webhook URL resolves to a restricted internal IP.")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Webhook URL could not be resolved.")
+
+
+def get_high_score_jobs(min_score: int = 80, limit: int = 10, user_id: str = None) -> list[dict]:
     """Fetch recent high-scoring jobs from the database."""
     db = SessionLocal()
     try:
         from app.models.job import JobListing
-        records = (
+        query = (
             db.query(JobScore, JobListing)
             .join(JobListing, JobScore.listing_id == JobListing.id)
             .filter(JobScore.match_score >= min_score)
             .filter(JobScore.notified == False)
-            .order_by(JobScore.match_score.desc())
-            .limit(limit)
-            .all()
         )
+        if user_id:
+            query = query.filter(JobScore.user_id == user_id)
+            
+        records = query.order_by(JobScore.match_score.desc()).limit(limit).all()
         results = []
         for score, job in records:
             results.append({

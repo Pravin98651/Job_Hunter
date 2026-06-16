@@ -6,7 +6,7 @@ from docx import Document
 from playwright.async_api import async_playwright, Page, BrowserContext
 
 # Location of the user's primary resume PDF, if it exists
-RESUME_PATH = Path("app/api/uploads/resume.pdf")
+# (No longer hardcoded; passed dynamically via DB)
 
 async def fill_heuristic_fields(page: Page, profile: dict):
     """
@@ -64,7 +64,7 @@ async def fill_heuristic_fields(page: Page, profile: dict):
             pass
 
 
-async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text: str | None = None):
+async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text: str | None = None, resume_bytes: bytes | None = None):
     """
     Launches a non-headless chromium browser, navigates to apply_url, attempts heuristic 
     filling, and waits for the user to close the browser manually.
@@ -85,10 +85,17 @@ async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text:
         os.close(fd)
         doc.save(temp_cover_letter_path)
 
+    # Create temporary resume file if bytes are provided
+    temp_resume_path = None
+    if resume_bytes:
+        fd, temp_resume_path = tempfile.mkstemp(suffix=".pdf")
+        with os.fdopen(fd, 'wb') as f:
+            f.write(resume_bytes)
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=False,
-            args=["--start-maximized", "--disable-blink-features=AutomationControlled"]
+            headless=True,
+            args=["--window-size=1280,800", "--disable-blink-features=AutomationControlled"]
         )
         context = await browser.new_context(viewport={"width": 1280, "height": 800})
         page = await context.new_page()
@@ -116,20 +123,22 @@ async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text:
                     is_resume = "resume" in id_val.lower() or "resume" in name_val.lower() or "cv" in id_val.lower() or "cv" in name_val.lower()
                     is_cover = "cover" in id_val.lower() or "cover" in name_val.lower() or "letter" in id_val.lower()
 
-                    if is_resume and RESUME_PATH.exists():
-                        await f_input.set_input_files(str(RESUME_PATH.absolute()))
+                    if is_resume and temp_resume_path:
+                        await f_input.set_input_files(temp_resume_path)
                     elif is_cover and temp_cover_letter_path:
                         await f_input.set_input_files(temp_cover_letter_path)
                     elif not is_resume and not is_cover:
                         # Fallback: if there's only one file input, usually it's the resume
-                        if len(file_inputs) == 1 and RESUME_PATH.exists():
-                            await f_input.set_input_files(str(RESUME_PATH.absolute()))
+                        if len(file_inputs) == 1 and temp_resume_path:
+                            await f_input.set_input_files(temp_resume_path)
                 except Exception:
                     pass
 
-            # Wait indefinitely until the page or browser context is closed by the user
-            # We wait for the page "close" event
-            await page.wait_for_event("close", timeout=0)
+            # Wait for 5 minutes (300000 ms) instead of indefinitely
+            try:
+                await page.wait_for_event("close", timeout=300000)
+            except Exception as e:
+                print("Playwright session timed out or closed.")
             
         except Exception as e:
             print(f"Playwright automation error: {e}")
@@ -137,5 +146,7 @@ async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text:
             # Cleanup temp files
             if temp_cover_letter_path and os.path.exists(temp_cover_letter_path):
                 os.remove(temp_cover_letter_path)
+            if temp_resume_path and os.path.exists(temp_resume_path):
+                os.remove(temp_resume_path)
             
             await browser.close()
