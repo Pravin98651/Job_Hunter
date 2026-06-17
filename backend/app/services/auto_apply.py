@@ -66,7 +66,7 @@ async def fill_heuristic_fields(page: Page, profile: dict):
 
 async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text: str | None = None, resume_bytes: bytes | None = None):
     """
-    Launches a non-headless chromium browser, navigates to apply_url, attempts heuristic 
+    Launches a visible (non-headless) chromium browser, navigates to apply_url, attempts heuristic 
     filling, and waits for the user to close the browser manually.
     """
     if not apply_url or not apply_url.startswith("http"):
@@ -94,7 +94,7 @@ async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text:
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True,
+            headless=False,
             args=["--window-size=1280,800", "--disable-blink-features=AutomationControlled"]
         )
         context = await browser.new_context(viewport={"width": 1280, "height": 800})
@@ -143,10 +143,10 @@ async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text:
         except Exception as e:
             print(f"Playwright automation error: {e}")
         finally:
-            # Cleanup temp files
-            if temp_cover_letter_path and os.path.exists(temp_cover_letter_path):
-                os.remove(temp_cover_letter_path)
-            if temp_resume_path and os.path.exists(temp_resume_path):
-                os.remove(temp_resume_path)
-            
             await browser.close()
+
+    # Cleanup temp files outside the playwright context to ensure they're always cleaned
+    if temp_cover_letter_path and os.path.exists(temp_cover_letter_path):
+        os.remove(temp_cover_letter_path)
+    if temp_resume_path and os.path.exists(temp_resume_path):
+        os.remove(temp_resume_path)

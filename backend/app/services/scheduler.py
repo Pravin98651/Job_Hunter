@@ -2,6 +2,7 @@
 Scheduler service using APScheduler for recurring scrapes and notifications.
 """
 
+import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -13,7 +14,9 @@ from app.services.notifications import (
     generate_digest_summary,
 )
 from app.db.session import SessionLocal
-from app.models.user import NotificationSettings
+from app.models.user import NotificationSettings, User
+
+logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
@@ -24,6 +27,21 @@ async def scheduled_scrape_and_notify_for_user(user_id: str):
         config_obj = db.query(NotificationSettings).filter(NotificationSettings.user_id == user_id).first()
         if not config_obj or not config_obj.enabled:
             return
+
+        # Load the actual user profile for personalized scoring
+        user = db.query(User).filter(User.id == user_id).first()
+        user_profile = {}
+        if user:
+            # Build profile from resume_profile and preferences
+            resume = user.resume_profile or {}
+            prefs = user.preferences or {}
+            user_profile = {
+                "title": prefs.get("targetTitle", resume.get("targetTitle", "Software Engineer")),
+                "skills": prefs.get("mustHaveSkills", resume.get("skills", [])),
+                "experience_years": prefs.get("yearsExperience", resume.get("yearsExperience", 3)),
+                "salary_expectation_min": prefs.get("minSalary", 0),
+                "preferred_location": prefs.get("locations", ["Remote"])[0] if prefs.get("locations") else "Remote",
+            }
             
         config = {
             "user_id": str(config_obj.user_id),
@@ -36,21 +54,21 @@ async def scheduled_scrape_and_notify_for_user(user_id: str):
     finally:
         db.close()
 
-    print(f"[Scheduler] Running scheduled scrape: {config['scrape_query']} in {config['scrape_location']} for user {user_id}")
+    logger.info(f"[Scheduler] Running scheduled scrape: {config['scrape_query']} in {config['scrape_location']} for user {user_id}")
 
     try:
-        # Run the orchestrator pipeline
+        # Run the orchestrator pipeline with real user profile
         await orchestrator_app.ainvoke({
             "user_id": config["user_id"],
             "query": config["scrape_query"],
             "location": config["scrape_location"],
-            "user_profile": {},
+            "user_profile": user_profile,
             "raw_listings": [],
             "scored_listings": [],
         })
-        print(f"[Scheduler] Scrape completed successfully for user {user_id}.")
+        logger.info(f"[Scheduler] Scrape completed successfully for user {user_id}.")
     except Exception as e:
-        print(f"[Scheduler] Scrape failed for user {user_id}: {e}")
+        logger.error(f"[Scheduler] Scrape failed for user {user_id}: {e}")
         return
 
     # Check for high-score matches
@@ -60,24 +78,24 @@ async def scheduled_scrape_and_notify_for_user(user_id: str):
     )
 
     if not high_score_jobs:
-        print(f"[Scheduler] No new high-score matches for user {user_id}.")
+        logger.info(f"[Scheduler] No new high-score matches for user {user_id}.")
         return
 
-    print(f"[Scheduler] Found {len(high_score_jobs)} new high-score matches for user {user_id}.")
+    logger.info(f"[Scheduler] Found {len(high_score_jobs)} new high-score matches for user {user_id}.")
 
     # Send Slack notification
     if config.get("slack_webhook"):
         success = await send_webhook_notification(
             config["slack_webhook"], high_score_jobs, "slack"
         )
-        print(f"[Scheduler] Slack notification: {'sent' if success else 'failed'}")
+        logger.info(f"[Scheduler] Slack notification: {'sent' if success else 'failed'}")
 
     # Send Telegram notification
     if config.get("telegram_webhook"):
         success = await send_webhook_notification(
             config["telegram_webhook"], high_score_jobs, "telegram"
         )
-        print(f"[Scheduler] Telegram notification: {'sent' if success else 'failed'}")
+        logger.info(f"[Scheduler] Telegram notification: {'sent' if success else 'failed'}")
 
     # Mark as notified
     score_ids = [j["scoreId"] for j in high_score_jobs]
@@ -101,7 +119,7 @@ def schedule_user(user_id: str, hours: int):
 
     if not scheduler.running:
         scheduler.start()
-    print(f"[Scheduler] Started job for {user_id}. Scraping every {hours} hours.")
+    logger.info(f"[Scheduler] Started job for {user_id}. Scraping every {hours} hours.")
 
 
 def unschedule_user(user_id: str):
@@ -109,7 +127,7 @@ def unschedule_user(user_id: str):
     job_id = f"scrape_{user_id}"
     if scheduler.get_job(job_id):
         scheduler.remove_job(job_id)
-        print(f"[Scheduler] Stopped job for {user_id}.")
+        logger.info(f"[Scheduler] Stopped job for {user_id}.")
 
 
 def start_scheduler():
@@ -125,4 +143,3 @@ def start_scheduler():
 def stop_scheduler():
     if scheduler.running:
         scheduler.shutdown(wait=False)
-

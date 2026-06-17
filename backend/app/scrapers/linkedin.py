@@ -3,19 +3,14 @@ import urllib.parse
 import asyncio
 from bs4 import BeautifulSoup
 from app.schemas.jobs import JobListingCreate
-
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-}
+from app.utils.http import get_random_headers
 
 
 async def _fetch_job_description(client: httpx.AsyncClient, url: str) -> str | None:
     """Fetch full job description from a LinkedIn job page."""
     for attempt in range(3):
         try:
-            resp = await client.get(url, headers=HEADERS, follow_redirects=True, timeout=15)
+            resp = await client.get(url, headers=get_random_headers(), follow_redirects=True, timeout=15)
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 desc_div = soup.find('div', class_='show-more-less-html__markup')
@@ -49,7 +44,7 @@ async def scrape_linkedin_jobs(query: str, location: str, max_results: int = 10)
                     f"?keywords={encoded_query}&location={encoded_location}&start={start}"
                 )
                 try:
-                    response = await client.get(url, headers=HEADERS)
+                    response = await client.get(url, headers=get_random_headers())
                     if response.status_code != 200:
                         print(f"LinkedIn search returned {response.status_code} at start={start}")
                         break

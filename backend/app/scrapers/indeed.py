@@ -3,25 +3,14 @@ import urllib.parse
 import asyncio
 from bs4 import BeautifulSoup
 from app.schemas.jobs import JobListingCreate
+from app.utils.http import get_random_headers
 import uuid
-
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'none',
-    'Sec-Fetch-User': '?1',
-}
 
 async def _fetch_indeed_job_description(client: httpx.AsyncClient, url: str) -> str | None:
     """Fetch full job description from an Indeed job page."""
     for attempt in range(2):
         try:
-            resp = await client.get(url, headers=HEADERS, follow_redirects=True, timeout=15)
+            resp = await client.get(url, headers=get_random_headers(), follow_redirects=True, timeout=15)
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 desc_div = soup.find('div', id='jobDescriptionText')
@@ -51,7 +40,7 @@ async def scrape_indeed_jobs(query: str, location: str, max_results: int = 10) -
     try:
         async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
             try:
-                response = await client.get(url, headers=HEADERS)
+                response = await client.get(url, headers=get_random_headers())
                 if response.status_code != 200:
                     print(f"Indeed search returned {response.status_code}")
                     return []

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List
 from app.schemas.jobs import JobListingCreate
@@ -12,6 +13,8 @@ from app.db.session import SessionLocal
 from app.models.job import JobListing, JobScore
 from app.services.dedup import is_duplicate, generate_embedding
 
+logger = logging.getLogger(__name__)
+
 class AgentState(TypedDict):
     user_id: str
     query: str
@@ -21,7 +24,7 @@ class AgentState(TypedDict):
     user_profile: dict
 
 async def scrape_jobs(state: AgentState):
-    print(f"Scraping jobs for {state['query']} in {state['location']} from multiple sources...")
+    logger.info(f"Scraping jobs for {state['query']} in {state['location']} from multiple sources...")
     
     # Run scrapers concurrently. Set max_results per source to keep the total reasonable.
     max_per_source = 5
@@ -39,13 +42,13 @@ async def scrape_jobs(state: AgentState):
         if isinstance(r, list):
             all_jobs.extend(r)
         elif isinstance(r, Exception):
-            print(f"A scraper failed: {r}")
+            logger.warning(f"A scraper failed: {r}")
             
-    print(f"Aggregated {len(all_jobs)} total jobs across all platforms.")
+    logger.info(f"Aggregated {len(all_jobs)} total jobs across all platforms.")
     return {"raw_listings": all_jobs}
 
 async def score_jobs(state: AgentState):
-    print(f"Scoring {len(state.get('raw_listings', []))} listings...")
+    logger.info(f"Scoring {len(state.get('raw_listings', []))} listings...")
     
     user_profile = state.get("user_profile") or {
         "title": "AI Engineer",
@@ -56,12 +59,18 @@ async def score_jobs(state: AgentState):
     
     db = SessionLocal()
     try:
+        # Collect all jobs and scores first, then commit as a single batch
+        pending_jobs = []
+        pending_scores = []
+        
         for job in state.get('raw_listings', []):
             if is_duplicate(db, job.description):
-                print(f"Skipping duplicate: {job.title}")
+                logger.info(f"Skipping duplicate: {job.title}")
                 continue
                 
             try:
+                embedding = generate_embedding(job.description)
+                
                 db_job = JobListing(
                     source=job.source,
                     external_id=job.external_id,
@@ -72,10 +81,10 @@ async def score_jobs(state: AgentState):
                     salary_max=job.salary_max,
                     description=job.description,
                     apply_url=str(job.apply_url),
-                    embedding=generate_embedding(job.description)
+                    embedding=embedding if any(v != 0.0 for v in embedding) else None
                 )
                 db.add(db_job)
-                db.flush()
+                db.flush()  # Get the ID without committing
                 
                 score_result = score_job_listing(job.description, user_profile)
                 
@@ -89,11 +98,24 @@ async def score_jobs(state: AgentState):
                     location_fit=score_result.location_fit
                 )
                 db.add(db_score)
+                
+                pending_jobs.append(db_job)
+                pending_scores.append(db_score)
+                
+            except Exception as e:
+                logger.error(f"Failed to process job {job.title}: {e}")
+                # Continue processing remaining jobs
+                continue
+        
+        # Single batch commit for all successful jobs
+        if pending_jobs:
+            try:
                 db.commit()
+                logger.info(f"Successfully committed {len(pending_jobs)} jobs and {len(pending_scores)} scores.")
             except Exception as e:
                 db.rollback()
-                print(f"Failed to process and score job {job.title}: {e}")
-                
+                logger.error(f"Batch commit failed, rolling back all {len(pending_jobs)} jobs: {e}")
+        
     finally:
         db.close()
     return {"scored_listings": []}

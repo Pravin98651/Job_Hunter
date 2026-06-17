@@ -7,7 +7,7 @@ score trends, skill gaps, pipeline funnel, and job-source breakdown.
 
 from collections import Counter
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, cast, Date
+from sqlalchemy import func, cast, Date, distinct
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -122,12 +122,12 @@ def get_sources(current_user_id: UUID = Depends(get_current_user_id), db: Sessio
     rows = (
         db.query(
             JobListing.source,
-            func.count(JobListing.id).label("count"),
+            func.count(distinct(JobListing.id)).label("count"),
         )
         .join(JobScore, JobScore.listing_id == JobListing.id)
         .filter(JobScore.user_id == current_user_id)
         .group_by(JobListing.source)
-        .order_by(func.count(JobListing.id).desc())
+        .order_by(func.count(distinct(JobListing.id)).desc())
         .all()
     )
 

@@ -173,9 +173,9 @@ def update_status(
 
     # Auto-set applied_at timestamp on first transition to "applied"
     if request.status == ApplicationStatus.applied and app_track.applied_at is None:
-        from sqlalchemy.sql import func
+        from datetime import datetime, timezone
 
-        app_track.applied_at = func.now()
+        app_track.applied_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(app_track)

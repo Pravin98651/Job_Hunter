@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.job import JobListing, JobScore
@@ -8,6 +8,10 @@ from pydantic import BaseModel
 from typing import List
 from uuid import UUID
 from app.api.deps import get_current_user_id
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter()
 
@@ -41,15 +45,17 @@ def get_scored_jobs(current_user_id: UUID = Depends(get_current_user_id), db: Se
     return results
 
 @router.post("/search")
-async def trigger_job_search(request: JobSearchRequest, current_user_id: UUID = Depends(get_current_user_id)):
+@limiter.limit("2/minute")
+async def trigger_job_search(request: Request, body: JobSearchRequest, current_user_id: UUID = Depends(get_current_user_id)):
     """
     Triggers the LangGraph orchestrator to scrape and score new jobs.
+    Rate limited to 2 requests per minute per IP.
     """
     state_input = {
         "user_id": str(current_user_id),
-        "query": request.query,
-        "location": request.location,
-        "user_profile": request.user_profile,
+        "query": body.query,
+        "location": body.location,
+        "user_profile": body.user_profile,
         "raw_listings": [],
         "scored_listings": []
     }

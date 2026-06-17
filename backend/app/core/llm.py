@@ -1,8 +1,8 @@
 import os
 import json
 import re
+import logging
 from typing import Any, Dict
-from pydantic import BaseModel
 from fastapi import HTTPException
 from app.core.config import settings
 
@@ -13,29 +13,44 @@ try:
 except ImportError:
     client = None
 
+logger = logging.getLogger(__name__)
+
+
 def extract_json_from_llm(text: str) -> Dict[str, Any]:
     """Robustly extract JSON from LLM output, even if wrapped in markdown fences."""
     # Try to find a JSON block inside ```json ... ```
     match = re.search(r'```(?:json)?\s*\n?(.*?)```', text, re.DOTALL)
     if match:
         text = match.group(1).strip()
-    
-    # Try to find first { ... } block
-    start = text.find('{')
-    end = text.rfind('}')
-    if start != -1 and end != -1:
-        text = text[start:end + 1]
-    
+
+    # Use raw_decode to find the first valid JSON object
+    decoder = json.JSONDecoder()
+    # Find the first '{' or '['
+    for i, ch in enumerate(text):
+        if ch in ('{', '['):
+            try:
+                result, _ = decoder.raw_decode(text, i)
+                if isinstance(result, dict):
+                    return result
+                # If it decoded a list, wrap it or continue
+            except json.JSONDecodeError:
+                continue
+
+    # Fallback: try the whole text
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
         raise ValueError(f"Failed to parse JSON from LLM output: {e}. Output was: {text[:200]}...")
 
+
 def generate_json_response(prompt: str, model: str = "gemini-2.0-flash", temperature: float = 0.0) -> Dict[str, Any]:
     """Generate content from Gemini and extract JSON safely."""
     if not client:
-        raise RuntimeError("Gemini API client not configured. Ensure GEMINI_API_KEY is set.")
-    
+        raise HTTPException(
+            status_code=503,
+            detail="AI service unavailable. Ensure GEMINI_API_KEY is set.",
+        )
+
     try:
         response = client.models.generate_content(
             model=model,
@@ -45,7 +60,11 @@ def generate_json_response(prompt: str, model: str = "gemini-2.0-flash", tempera
             ),
         )
         return extract_json_from_llm(response.text)
+    except HTTPException:
+        raise
     except Exception as e:
-        import logging
-        logging.error(f"LLM Generation Failed: {e}", exc_info=True)
-        raise RuntimeError("AI model generation failed.") from e
+        logger.error(f"LLM Generation Failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail="An internal error occurred while processing the AI request.",
+        )
