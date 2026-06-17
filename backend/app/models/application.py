@@ -1,6 +1,6 @@
 import uuid
 import enum
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum as SQLEnum, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.models.base import Base
@@ -20,8 +20,12 @@ class ApplicationTrack(Base):
     __tablename__ = "application_tracks"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    listing_id = Column(UUID(as_uuid=True), ForeignKey("job_listings.id"), unique=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    listing_id = Column(UUID(as_uuid=True), ForeignKey("job_listings.id", ondelete="CASCADE"))
+    
+    __table_args__ = (
+        UniqueConstraint('user_id', 'listing_id', name='uq_user_listing'),
+    )
     status = Column(
         SQLEnum(ApplicationStatus), default=ApplicationStatus.bookmarked, index=True
     )

@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Boolean, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Boolean, Text, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.sql import func
@@ -22,13 +22,15 @@ class JobListing(Base):
     scraped_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
 
+Index("ix_job_listings_embedding", JobListing.embedding, postgresql_using="hnsw", postgresql_with={"m": 16, "ef_construction": 64}, postgresql_ops={"embedding": "vector_cosine_ops"})
+
 
 class JobScore(Base):
     __tablename__ = "job_scores"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    listing_id = Column(UUID(as_uuid=True), ForeignKey("job_listings.id"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    listing_id = Column(UUID(as_uuid=True), ForeignKey("job_listings.id", ondelete="CASCADE"))
     match_score = Column(Integer)
     match_reason = Column(Text)
     skill_gaps = Column(ARRAY(String))
@@ -36,3 +38,8 @@ class JobScore(Base):
     location_fit = Column(Boolean)
     notified = Column(Boolean, default=False)
     scored_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'listing_id', name='uq_user_listing_score'),
+    )
+

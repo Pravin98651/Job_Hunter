@@ -1,8 +1,10 @@
-import os
 import json
-from google import genai
-from google.genai import types
+import logging
 from pydantic import BaseModel, Field
+from app.core.llm import client as _client, generate_json_response
+
+logger = logging.getLogger(__name__)
+
 
 class RewriteSuggestion(BaseModel):
     original_concept: str = Field(description="The general idea or skill from the user's resume")
@@ -20,8 +22,7 @@ def optimize_resume_for_job(resume_profile: dict, job_description: str) -> Resum
     Uses Gemini to analyze a user's resume profile against a specific job description
     and generates an ATS-optimized tailoring report.
     """
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
+    if not _client:
         # Fallback empty result if no API key
         return ResumeOptimizationResult(
             missing_keywords=["API Key missing"],
@@ -30,8 +31,6 @@ def optimize_resume_for_job(resume_profile: dict, job_description: str) -> Resum
             bullet_suggestions=[]
         )
         
-    client = genai.Client(api_key=api_key)
-    
     prompt = f"""
     You are an expert technical recruiter and ATS (Applicant Tracking System) optimizer.
     
@@ -49,24 +48,27 @@ def optimize_resume_for_job(resume_profile: dict, job_description: str) -> Resum
     2. The exact ATS keywords from the JD the candidate already has.
     3. A highly tailored 2-sentence Professional Summary they should use at the top of their resume for this specific job.
     4. 3 to 5 highly optimized bullet points they should add or replace in their experience section to explicitly hit the JD's requirements, incorporating the missing keywords logically based on their background.
+    
+    Return ONLY a valid JSON object with these fields:
+    {{
+        "missing_keywords": ["keyword1", "keyword2"],
+        "matched_keywords": ["keyword1", "keyword2"],
+        "tailored_summary": "...",
+        "bullet_suggestions": [
+            {{
+                "original_concept": "...",
+                "suggested_bullet": "...",
+                "reasoning": "..."
+            }}
+        ]
+    }}
     """
     
     try:
-        response = client.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=ResumeOptimizationResult,
-                temperature=0.2,
-            ),
-        )
-        
-        # Parse the JSON response
-        result_dict = json.loads(response.text)
-        return ResumeOptimizationResult(**result_dict)
+        data = generate_json_response(prompt, temperature=0.2)
+        return ResumeOptimizationResult(**data)
     except Exception as e:
-        print(f"Error during resume optimization: {e}")
+        logger.error(f"Error during resume optimization: {e}", exc_info=True)
         return ResumeOptimizationResult(
             missing_keywords=["Error analyzing resume"],
             matched_keywords=[],

@@ -2,43 +2,74 @@
 Notification & scheduling service.
 
 Provides:
-- APScheduler-based cron for recurring scrapes
 - Notification dispatch helpers (email placeholder, webhook)
 - High-score match detection after each scrape
+- Digest summary generation via centralized LLM
 """
 
-import os
+import ipaddress
 import json
+import logging
+import socket
+from urllib.parse import urlparse
 from datetime import datetime
 from typing import Optional
 
-from app.core.config import settings
+from fastapi import HTTPException
+
+from app.core.llm import client as _client
 from app.db.session import SessionLocal
 from app.models.job import JobScore
 
-# Gemini client for generating digest summaries
-try:
-    from google import genai
-    _api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
-    _client = genai.Client(api_key=_api_key) if _api_key else None
-except ImportError:
-    _client = None
+logger = logging.getLogger(__name__)
 
 
-def get_high_score_jobs(min_score: int = 80, limit: int = 10) -> list[dict]:
-    """Fetch recent high-scoring jobs from the database."""
+def validate_webhook_url(url: str):
+    """Validate webhook URL to prevent SSRF attacks."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Invalid webhook URL scheme.")
+        
+    hostname = parsed.hostname
+    if not hostname:
+        raise HTTPException(status_code=400, detail="Invalid webhook URL.")
+
+    # Resolve hostname and check against all private/reserved ranges
+    try:
+        resolved_ips = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        raise HTTPException(status_code=400, detail="Webhook URL could not be resolved.")
+
+    for family, _, _, _, sockaddr in resolved_ips:
+        ip_str = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Webhook URL resolves to a restricted internal IP.",
+                )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid IP address resolved.")
+
+
+def get_high_score_jobs(min_score: int = 80, limit: int = 10, user_id: str = "") -> list[dict]:
+    """Fetch recent high-scoring jobs from the database. user_id is required."""
+    if not user_id:
+        return []
+
     db = SessionLocal()
     try:
         from app.models.job import JobListing
-        records = (
+        query = (
             db.query(JobScore, JobListing)
             .join(JobListing, JobScore.listing_id == JobListing.id)
             .filter(JobScore.match_score >= min_score)
             .filter(JobScore.notified == False)
-            .order_by(JobScore.match_score.desc())
-            .limit(limit)
-            .all()
+            .filter(JobScore.user_id == user_id)
         )
+            
+        records = query.order_by(JobScore.match_score.desc()).limit(limit).all()
         results = []
         for score, job in records:
             results.append({
@@ -116,11 +147,11 @@ async def send_webhook_notification(
         return False
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(webhook_url, json=payload)
+        async with httpx.AsyncClient(timeout=10) as http_client:
+            resp = await http_client.post(webhook_url, json=payload)
             return resp.status_code == 200
     except Exception as e:
-        print(f"Webhook notification failed: {e}")
+        logger.error(f"Webhook notification failed: {e}")
         return False
 
 
@@ -148,5 +179,5 @@ Keep it motivating and concise. Don't include subject lines or greetings."""
         )
         return response.text.strip()
     except Exception as e:
-        print(f"Digest generation failed: {e}")
+        logger.error(f"Digest generation failed: {e}")
         return f"Found {len(jobs)} new high-score job matches."

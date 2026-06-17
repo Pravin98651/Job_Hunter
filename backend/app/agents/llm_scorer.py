@@ -3,14 +3,7 @@ import json
 import re
 from pydantic import BaseModel, Field
 from app.core.config import settings
-
-# Use the new google.genai SDK
-from google import genai
-
-# Configure the client with the API key from settings
-_api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
-_client = genai.Client(api_key=_api_key) if _api_key else None
-
+from app.core.llm import client as _client, generate_json_response
 
 class JobScoreResult(BaseModel):
     match_score: int = Field(description="Match score from 0 to 100")
@@ -19,19 +12,6 @@ class JobScoreResult(BaseModel):
     salary_fit: bool = Field(description="Whether salary range overlaps preference")
     location_fit: bool = Field(description="Whether location matches preference")
 
-
-def _extract_json(text: str) -> dict:
-    """Robustly extract JSON from LLM output, even if wrapped in markdown fences."""
-    # Try to find a JSON block inside ```json ... ```
-    match = re.search(r'```(?:json)?\s*\n?(.*?)```', text, re.DOTALL)
-    if match:
-        text = match.group(1).strip()
-    # Try to find first { ... } block
-    start = text.find('{')
-    end = text.rfind('}')
-    if start != -1 and end != -1:
-        text = text[start:end + 1]
-    return json.loads(text)
 
 
 def score_job_listing(job_description: str, user_profile: dict) -> JobScoreResult:
@@ -79,19 +59,13 @@ Return ONLY a valid JSON object (no markdown, no explanation outside the JSON):
 }}"""
 
     try:
-        response = _client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                temperature=0.0,
-            ),
-        )
-        data = _extract_json(response.text)
+        data = generate_json_response(prompt)
         # Clamp score to 0-100
         data['match_score'] = max(0, min(100, int(data.get('match_score', 50))))
         return JobScoreResult(**data)
     except Exception as e:
-        print(f"Gemini scoring failed: {e}")
+        import logging
+        logging.error(f"Gemini scoring failed: {e}", exc_info=True)
         return _mock_score(job_description, user_profile)
 
 

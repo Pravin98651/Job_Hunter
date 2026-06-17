@@ -11,41 +11,17 @@ import json
 import re
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
+from uuid import UUID
 
 from app.core.config import settings
+from app.api.deps import get_current_user_id
 
-# ---------------------------------------------------------------------------
-# Gemini client (same pattern as resume.py / llm_scorer.py)
-# ---------------------------------------------------------------------------
-try:
-    from google import genai
-
-    _api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
-    _client = genai.Client(api_key=_api_key) if _api_key else None
-except ImportError:
-    _client = None
+from app.core.llm import generate_json_response
+import logging
 
 router = APIRouter()
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _extract_json(text: str) -> dict:
-    """Robustly extract JSON from LLM output, even if wrapped in markdown fences."""
-    match = re.search(r'```(?:json)?\s*\n?(.*?)```', text, re.DOTALL)
-    if match:
-        text = match.group(1).strip()
-    start = text.find('{')
-    end = text.rfind('}')
-    if start != -1 and end != -1:
-        text = text[start:end + 1]
-    return json.loads(text)
-
-
 # ---------------------------------------------------------------------------
 # Request / response schemas
 # ---------------------------------------------------------------------------
@@ -94,17 +70,12 @@ class CompanyBriefResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.post("/questions", response_model=QuestionsResponse)
-async def generate_interview_questions(request: QuestionsRequest):
+async def generate_interview_questions(request: QuestionsRequest, current_user_id: UUID = Depends(get_current_user_id)):
     """
     Generate 8-10 likely interview questions for a specific role using
     Gemini 2.0 Flash.  Questions are tailored to the job description,
     company, and candidate's resume profile.
     """
-    if not _client:
-        raise HTTPException(
-            status_code=503,
-            detail="Gemini API is not configured. Set GEMINI_API_KEY in .env.",
-        )
 
     # Build a concise summary of the candidate profile for the prompt
     profile = request.resume_profile
@@ -156,14 +127,7 @@ generic.  Each tip should be actionable and concise.
 """
 
     try:
-        response = _client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                temperature=0.0,
-            ),
-        )
-        data = _extract_json(response.text)
+        data = generate_json_response(prompt)
 
         # Validate the expected shape
         if "questions" not in data or not isinstance(data["questions"], list):
@@ -182,9 +146,10 @@ generic.  Each tip should be actionable and concise.
     except HTTPException:
         raise
     except Exception as e:
+        logging.error(f"Failed to generate interview questions: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to generate interview questions: {e}",
+            detail="An internal error occurred while generating interview questions.",
         )
 
 
@@ -193,16 +158,11 @@ generic.  Each tip should be actionable and concise.
 # ---------------------------------------------------------------------------
 
 @router.post("/company-brief", response_model=CompanyBriefResponse)
-async def generate_company_brief(request: CompanyBriefRequest):
+async def generate_company_brief(request: CompanyBriefRequest, current_user_id: UUID = Depends(get_current_user_id)):
     """
     Generate a company research brief using Gemini 2.0 Flash.
     Covers overview, culture, recent news, interview tips, and sentiment.
     """
-    if not _client:
-        raise HTTPException(
-            status_code=503,
-            detail="Gemini API is not configured. Set GEMINI_API_KEY in .env.",
-        )
 
     prompt = f"""You are a career-research analyst.  Compile a concise company
 research brief that a candidate can review before an interview.
@@ -238,14 +198,7 @@ information should be verified.  Aim for 3-5 items in each list.
 """
 
     try:
-        response = _client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                temperature=0.0,
-            ),
-        )
-        data = _extract_json(response.text)
+        data = generate_json_response(prompt)
 
         brief = CompanyBrief(
             overview=data.get("overview", ""),
@@ -258,7 +211,8 @@ information should be verified.  Aim for 3-5 items in each list.
     except HTTPException:
         raise
     except Exception as e:
+        logging.error(f"Failed to generate company brief: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to generate company brief: {e}",
+            detail="An internal error occurred while generating company brief.",
         )

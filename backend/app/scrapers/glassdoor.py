@@ -3,21 +3,15 @@ import urllib.parse
 import asyncio
 from bs4 import BeautifulSoup
 from app.schemas.jobs import JobListingCreate
+from app.utils.http import get_random_headers
 import uuid
 import json
-
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Connection': 'keep-alive',
-}
 
 async def _fetch_glassdoor_job_description(client: httpx.AsyncClient, url: str) -> str | None:
     """Fetch full job description from a Glassdoor job page."""
     for attempt in range(2):
         try:
-            resp = await client.get(url, headers=HEADERS, follow_redirects=True, timeout=15)
+            resp = await client.get(url, headers=get_random_headers(), follow_redirects=True, timeout=15)
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 desc_div = soup.find('div', class_='JobDetails_jobDescription__uW_fK')
@@ -49,7 +43,7 @@ async def scrape_glassdoor_jobs(query: str, location: str, max_results: int = 10
     try:
         async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
             try:
-                response = await client.get(url, headers=HEADERS)
+                response = await client.get(url, headers=get_random_headers())
                 if response.status_code != 200:
                     print(f"Glassdoor search returned {response.status_code}")
                     return []
@@ -147,20 +141,7 @@ async def scrape_glassdoor_jobs(query: str, location: str, max_results: int = 10
         print(f"Failed to scrape Glassdoor: {e}")
 
     if len(jobs) == 0:
-        print("Glassdoor scraper returned 0 jobs (likely blocked). Providing a mock job for demonstration.")
-        jobs.append(
-            JobListingCreate(
-                title=f"Lead {query} Developer (Mock)",
-                company="Glassdoor Demo Corp",
-                location=location,
-                salary_min=140000,
-                salary_max=180000,
-                description=f"This is a mocked job description because Glassdoor blocked the scraper. We are hiring a lead {query} developer. Must have 5+ years of experience with distributed systems.",
-                apply_url="https://www.glassdoor.com",
-                source="glassdoor",
-                external_id=str(uuid.uuid4()),
-            )
-        )
+        print("Glassdoor scraper returned 0 jobs (likely blocked or no results).")
 
     print(f"Successfully scraped {len(jobs)} jobs from Glassdoor")
     return jobs

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.job import JobListing, JobScore
@@ -6,21 +6,26 @@ from app.schemas.jobs import JobListingResponse
 from app.agents.orchestrator import orchestrator_app
 from pydantic import BaseModel
 from typing import List
+from uuid import UUID
+from app.api.deps import get_current_user_id
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter()
 
 class JobSearchRequest(BaseModel):
     query: str
     location: str
-    user_id: str
     user_profile: dict | None = None
 
 @router.get("/", response_model=List[dict])
-def get_scored_jobs(db: Session = Depends(get_db), skip: int = 0, limit: int = 50):
+def get_scored_jobs(current_user_id: UUID = Depends(get_current_user_id), db: Session = Depends(get_db), skip: int = 0, limit: int = 50):
     """
     Returns the latest jobs and their AI-generated scores.
     """
-    records = db.query(JobScore, JobListing).join(JobListing, JobScore.listing_id == JobListing.id).order_by(JobScore.scored_at.desc()).offset(skip).limit(limit).all()
+    records = db.query(JobScore, JobListing).join(JobListing, JobScore.listing_id == JobListing.id).filter(JobScore.user_id == current_user_id).order_by(JobScore.scored_at.desc()).offset(skip).limit(limit).all()
     results = []
     for score, job in records:
         results.append({
@@ -40,15 +45,17 @@ def get_scored_jobs(db: Session = Depends(get_db), skip: int = 0, limit: int = 5
     return results
 
 @router.post("/search")
-async def trigger_job_search(request: JobSearchRequest):
+@limiter.limit("2/minute")
+async def trigger_job_search(request: Request, body: JobSearchRequest, current_user_id: UUID = Depends(get_current_user_id)):
     """
     Triggers the LangGraph orchestrator to scrape and score new jobs.
+    Rate limited to 2 requests per minute per IP.
     """
     state_input = {
-        "user_id": request.user_id,
-        "query": request.query,
-        "location": request.location,
-        "user_profile": request.user_profile,
+        "user_id": str(current_user_id),
+        "query": body.query,
+        "location": body.location,
+        "user_profile": body.user_profile,
         "raw_listings": [],
         "scored_listings": []
     }

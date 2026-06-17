@@ -5,17 +5,20 @@ Provides REST endpoints to configure and control the recurring scrape
 scheduler, notification webhooks, and digest settings.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from uuid import UUID
+from app.api.deps import get_current_user_id
 
 from app.services.scheduler import (
-    get_config,
-    update_config,
-    start_scheduler,
-    stop_scheduler,
-    scheduled_scrape_and_notify,
+    schedule_user,
+    unschedule_user,
+    scheduled_scrape_and_notify_for_user,
 )
-from app.services.notifications import get_high_score_jobs, generate_digest_summary
+from app.services.notifications import get_high_score_jobs, generate_digest_summary, validate_webhook_url
+from app.db.session import get_db
+from sqlalchemy.orm import Session
+from app.models.user import NotificationSettings
 
 router = APIRouter()
 
@@ -32,54 +35,105 @@ class NotificationConfigUpdate(BaseModel):
 
 
 @router.get("/config")
-def get_notification_config():
+def get_notification_config(current_user_id: UUID = Depends(get_current_user_id), db: Session = Depends(get_db)):
     """Get current notification & scheduling configuration."""
-    return get_config()
+    config = db.query(NotificationSettings).filter(NotificationSettings.user_id == current_user_id).first()
+    if not config:
+        config = NotificationSettings(user_id=current_user_id)
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+    
+    return {
+        "enabled": config.enabled,
+        "scrape_interval_hours": config.scrape_interval_hours,
+        "min_score_threshold": config.min_score_threshold,
+        "slack_webhook": config.slack_webhook,
+        "telegram_webhook": config.telegram_webhook,
+        "email": config.email,
+        "scrape_query": config.scrape_query,
+        "scrape_location": config.scrape_location,
+        "user_id": str(config.user_id),
+    }
 
 
 @router.patch("/config")
-def update_notification_config(updates: NotificationConfigUpdate):
+def update_notification_config(
+    updates: NotificationConfigUpdate, 
+    current_user_id: UUID = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
     """Update notification & scheduling configuration."""
+    # Validate Webhooks for SSRF
+    if updates.slack_webhook:
+        validate_webhook_url(updates.slack_webhook)
+    if updates.telegram_webhook:
+        validate_webhook_url(updates.telegram_webhook)
+
+    config = db.query(NotificationSettings).filter(NotificationSettings.user_id == current_user_id).first()
+    if not config:
+        config = NotificationSettings(user_id=current_user_id)
+        db.add(config)
+
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
-    config = update_config(update_data)
+    for key, value in update_data.items():
+        setattr(config, key, value)
+    
+    db.commit()
+    db.refresh(config)
 
-    # Restart scheduler if enabled status changed
-    if "enabled" in update_data:
-        if config["enabled"]:
-            start_scheduler()
-        else:
-            stop_scheduler()
+    # Restart scheduler for this user if enabled
+    if config.enabled:
+        schedule_user(str(current_user_id), config.scrape_interval_hours)
+    else:
+        unschedule_user(str(current_user_id))
 
-    return config
+    return {
+        "enabled": config.enabled,
+        "scrape_interval_hours": config.scrape_interval_hours,
+        "min_score_threshold": config.min_score_threshold,
+        "slack_webhook": config.slack_webhook,
+        "telegram_webhook": config.telegram_webhook,
+        "email": config.email,
+        "scrape_query": config.scrape_query,
+        "scrape_location": config.scrape_location,
+        "user_id": str(config.user_id),
+    }
 
 
 @router.post("/start")
-def start_notifications():
+def start_notifications(current_user_id: UUID = Depends(get_current_user_id), db: Session = Depends(get_db)):
     """Start the recurring scrape scheduler."""
-    config = update_config({"enabled": True})
-    start_scheduler()
-    return {"status": "Scheduler started", "config": config}
+    config = db.query(NotificationSettings).filter(NotificationSettings.user_id == current_user_id).first()
+    if config:
+        config.enabled = True
+        db.commit()
+        schedule_user(str(current_user_id), config.scrape_interval_hours)
+    return {"status": "Scheduler started"}
 
 
 @router.post("/stop")
-def stop_notifications():
+def stop_notifications(current_user_id: UUID = Depends(get_current_user_id), db: Session = Depends(get_db)):
     """Stop the recurring scrape scheduler."""
-    update_config({"enabled": False})
-    stop_scheduler()
+    config = db.query(NotificationSettings).filter(NotificationSettings.user_id == current_user_id).first()
+    if config:
+        config.enabled = False
+        db.commit()
+        unschedule_user(str(current_user_id))
     return {"status": "Scheduler stopped"}
 
 
 @router.post("/trigger")
-async def trigger_scrape_now():
+async def trigger_scrape_now(current_user_id: UUID = Depends(get_current_user_id)):
     """Manually trigger a scrape + notification cycle."""
-    await scheduled_scrape_and_notify()
+    await scheduled_scrape_and_notify_for_user(str(current_user_id))
     return {"status": "Scrape and notification cycle completed"}
 
 
 @router.get("/preview-digest")
-def preview_digest():
+def preview_digest(current_user_id: UUID = Depends(get_current_user_id)):
     """Preview what a notification digest would look like right now."""
-    jobs = get_high_score_jobs(min_score=70, limit=10)
+    jobs = get_high_score_jobs(min_score=70, limit=10, user_id=str(current_user_id))
     summary = generate_digest_summary(jobs)
     return {
         "jobCount": len(jobs),

@@ -1,24 +1,24 @@
 import os
 import json
 import re
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from PyPDF2 import PdfReader
 import io
 
+from app.db.session import get_db
+from app.models.user import UserDocument
+
 from app.core.config import settings
 from app.agents.resume_optimizer import optimize_resume_for_job
+from app.api.deps import get_current_user_id
+from uuid import UUID
 
 router = APIRouter()
 
-# Try to use Gemini for smart resume parsing
-try:
-    from google import genai
-    _api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
-    _client = genai.Client(api_key=_api_key) if _api_key else None
-except ImportError:
-    _client = None
-
+from app.core.llm import client as _client, generate_json_response
+import logging
 
 def _extract_text_from_pdf(file_bytes: bytes) -> str:
     """Extract text from a PDF file."""
@@ -29,18 +29,6 @@ def _extract_text_from_pdf(file_bytes: bytes) -> str:
         if page_text:
             text_parts.append(page_text)
     return "\n".join(text_parts)
-
-
-def _extract_json(text: str) -> dict:
-    """Robustly extract JSON from LLM output."""
-    match = re.search(r'```(?:json)?\s*\n?(.*?)```', text, re.DOTALL)
-    if match:
-        text = match.group(1).strip()
-    start = text.find('{')
-    end = text.rfind('}')
-    if start != -1 and end != -1:
-        text = text[start:end + 1]
-    return json.loads(text)
 
 
 def _parse_resume_with_gemini(resume_text: str) -> dict:
@@ -70,14 +58,10 @@ Return ONLY a valid JSON object:
 }}"""
 
     try:
-        response = _client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-        )
-        data = _extract_json(response.text)
+        data = generate_json_response(prompt)
         return data
     except Exception as e:
-        print(f"Gemini resume parsing failed: {e}")
+        logging.error(f"Gemini resume parsing failed: {e}", exc_info=True)
         return _parse_resume_keyword(resume_text)
 
 
@@ -117,9 +101,14 @@ def _parse_resume_keyword(resume_text: str) -> dict:
 
 
 @router.post("/upload")
-async def upload_resume(file: UploadFile = File(...)):
+async def upload_resume(
+    file: UploadFile = File(...),
+    current_user_id: UUID = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
     """
     Upload a resume (PDF) and extract a structured profile using Gemini AI.
+    Saves the PDF bytes to the database if user_id is provided.
     Returns the parsed profile data that can be used for job matching.
     """
     # Validate file type
@@ -128,19 +117,34 @@ async def upload_resume(file: UploadFile = File(...)):
 
     allowed_types = [".pdf"]
     ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in allowed_types:
+    if ext not in allowed_types or file.content_type != "application/pdf":
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type: {ext}. Please upload a PDF file."
+            detail=f"Unsupported file type. Please upload a valid PDF file."
         )
 
     # Read file
     try:
         contents = await file.read()
-        if len(contents) > 10 * 1024 * 1024:  # 10MB limit
-            raise HTTPException(status_code=400, detail="File too large. Max 10MB.")
+        if len(contents) > 5 * 1024 * 1024:  # 5MB limit
+            raise HTTPException(status_code=400, detail="File too large. Max 5MB.")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
+
+    # Save to database
+    # Check if they already have a document, if so, delete it
+    existing_doc = db.query(UserDocument).filter(UserDocument.user_id == current_user_id).first()
+    if existing_doc:
+        db.delete(existing_doc)
+        db.commit()
+        
+    doc = UserDocument(
+        user_id=current_user_id,
+        filename=file.filename,
+        file_data=contents
+    )
+    db.add(doc)
+    db.commit()
 
     # Extract text
     try:
@@ -171,7 +175,7 @@ class OptimizeRequest(BaseModel):
     job_description: str
 
 @router.post("/optimize")
-async def optimize_resume(request: OptimizeRequest):
+async def optimize_resume(request: OptimizeRequest, current_user_id: UUID = Depends(get_current_user_id)):
     """
     Optimizes a resume against a job description, highlighting ATS keywords 
     and suggesting bullet point rewrites.
