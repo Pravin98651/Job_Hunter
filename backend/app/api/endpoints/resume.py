@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from PyPDF2 import PdfReader
 import io
+from app.utils import s3_mock
 
 from app.db.session import get_db
 from app.models.user import UserDocument
@@ -141,7 +142,7 @@ async def upload_resume(
     doc = UserDocument(
         user_id=current_user_id,
         filename=file.filename,
-        file_data=contents
+        object_key=s3_mock.upload_file(contents, file.filename)
     )
     db.add(doc)
     db.commit()

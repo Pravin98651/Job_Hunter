@@ -28,7 +28,7 @@ class UserDocument(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     filename = Column(String(255))
-    file_data = Column(LargeBinary, nullable=False)
+    object_key = Column(String(1024), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class NotificationSettings(Base):

@@ -19,7 +19,7 @@ class JobListingCreate(JobListingBase):
 
 class JobListingResponse(JobListingBase):
     id: UUID
-    scraped_at: datetime
+    created_at: datetime
     is_active: bool
 
     class Config:

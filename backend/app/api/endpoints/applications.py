@@ -18,7 +18,8 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.application import ApplicationStatus, ApplicationTrack
 from app.models.job import JobListing, JobScore
-from app.models.user import UserDocument
+from app.models.user import User, UserDocument
+from app.utils import s3_mock
 from app.services.auto_apply import run_auto_fill
 from app.api.deps import get_current_user_id
 
@@ -327,7 +328,7 @@ def auto_fill_application(
 
     # Fetch the resume bytes if available
     doc = db.query(UserDocument).filter(UserDocument.user_id == app_track.user_id).first() if app_track.user_id else None
-    resume_bytes = doc.file_data if doc else None
+    resume_bytes = s3_mock.download_file(doc.object_key) if doc else None
 
     # Add the playwright task to background tasks
     background_tasks.add_task(

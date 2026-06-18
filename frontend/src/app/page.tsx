@@ -63,7 +63,6 @@ function incrementSearchCount(): number {
 
 function saveResumeProfile(profile: ResumeProfile) {
   if (typeof window === "undefined") return;
-  localStorage.setItem("jobhunt_resume_profile", JSON.stringify(profile));
   const id = localStorage.getItem("jobhunt_session_id");
   if (id) {
     apiFetch(`/api/users/me`, {
@@ -137,56 +136,59 @@ export default function Dashboard() {
   /* ── Load preferences + profile from Cloud (PostgreSQL) ── */
   useEffect(() => {
     const initializeSession = async () => {
-      let id = localStorage.getItem("jobhunt_session_id");
-      if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem("jobhunt_session_id", id);
-        // Create guest user on backend
-        try {
-          await apiFetch("/api/users/", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id })
-          });
-        } catch (e) { console.error("Error creating guest user", e); }
-      }
-
-      let res = await apiFetch(`/api/users/me`);
-      if (!res.ok) {
-        // If the user doesn't exist on the backend yet, create it.
-        try {
-          await apiFetch("/api/users/", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id })
-          });
-          res = await apiFetch(`/api/users/me`);
-        } catch (e) {
-          console.error("Error creating guest user", e);
-        }
-      }
-
       try {
-        if (res.ok) {
-          const userData = await res.json();
-          if (userData.preferences) {
-            setPrefs({ ...DEFAULT_PREFERENCES, ...userData.preferences });
-            setSearchQuery(userData.preferences.targetTitle || "AI Engineer");
-            setSearchLocation(userData.preferences.locations?.[0] || "Remote");
-          } else {
-            setSearchQuery(DEFAULT_PREFERENCES.targetTitle);
-            setSearchLocation(DEFAULT_PREFERENCES.locations[0]);
-          }
-          if (userData.resume_profile) {
-            setResumeProfile(userData.resume_profile);
-            setResumeFileName(localStorage.getItem("jobhunt_resume_filename") || "resume.pdf");
+        let id = localStorage.getItem("jobhunt_session_id");
+        if (!id) {
+          id = crypto.randomUUID();
+          localStorage.setItem("jobhunt_session_id", id);
+          // Create guest user on backend
+          try {
+            await apiFetch("/api/users/", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id })
+            });
+          } catch (e) { console.error("Error creating guest user", e); }
+        }
+
+        let res = await apiFetch(`/api/users/me`);
+        if (!res.ok) {
+          // If the user doesn't exist on the backend yet, create it.
+          try {
+            await apiFetch("/api/users/", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id })
+            });
+            res = await apiFetch(`/api/users/me`);
+          } catch (e) {
+            console.error("Error creating guest user", e);
           }
         }
-      } catch (e) {
-        console.error("Error fetching cloud user data", e);
+
+        try {
+          if (res.ok) {
+            const userData = await res.json();
+            if (userData.preferences) {
+              setPrefs({ ...DEFAULT_PREFERENCES, ...userData.preferences });
+              setSearchQuery(userData.preferences.targetTitle || "AI Engineer");
+              setSearchLocation(userData.preferences.locations?.[0] || "Remote");
+            } else {
+              setSearchQuery(DEFAULT_PREFERENCES.targetTitle);
+              setSearchLocation(DEFAULT_PREFERENCES.locations[0]);
+            }
+            if (userData.resume_profile) {
+              setResumeProfile(userData.resume_profile);
+              setResumeFileName(localStorage.getItem("jobhunt_resume_filename") || "resume.pdf");
+            }
+          }
+        } catch (e) {
+          console.error("Error fetching cloud user data", e);
+        }
+        setSearchCount(loadSearchCount()); // search count remains local for now
+      } finally {
+        setPrefsLoaded(true);
       }
-      setSearchCount(loadSearchCount()); // search count remains local for now
-      setPrefsLoaded(true);
     };
 
     initializeSession();
@@ -339,7 +341,7 @@ export default function Dashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           resume_profile: resumeProfile,
-          job_description: `Role: ${job.title} at ${job.company}\nDescription: ${job.matchReason}` // Ideally we'd send full description, but using reason for now to save bandwidth if full desc isn't in frontend
+          job_description: `Role: ${job.title} at ${job.company}\nDescription: ${job.description || job.matchReason}`
         }),
       });
       
@@ -364,10 +366,11 @@ export default function Dashboard() {
       setTrackedApps(data);
     } catch (err) {
       console.error("Failed to fetch tracked apps:", err);
+      showToast("Failed to load pipeline data", "error");
     } finally {
       setIsLoadingPipeline(false);
     }
-  }, []);
+  }, [showToast]);
 
   const handleTrackJob = useCallback(async (job: Job) => {
     try {
@@ -485,10 +488,11 @@ export default function Dashboard() {
       setSourceStats(await sourcesRes.json());
     } catch (err) {
       console.error("Failed to fetch analytics:", err);
+      showToast("Failed to load analytics", "error");
     } finally {
       setIsLoadingAnalytics(false);
     }
-  }, []);
+  }, [showToast]);
   // Analytics data is fetched when clicking the tab now.
 
   /* ── Interview Prep handlers ── */
@@ -556,12 +560,19 @@ export default function Dashboard() {
   }));
 
   /* ── Prevent flash of default state ── */
-  if (!prefsLoaded) return null;
+  if (!prefsLoaded) return (
+    <div className="min-h-screen bg-[#f5f5f0] dark:bg-[#0a0a0a] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+        <p className="text-sm text-muted-foreground font-medium">Loading your dashboard...</p>
+      </div>
+    </div>
+  );
 
   /* ════════════════════════════ RENDER ══════════════════════════ */
   return (
     <ErrorBoundary>
-    <main className="min-h-screen bg-[#f5f5f0] dark:bg-[#0a0a0a] font-[family-name:var(--font-geist-sans)] selection:bg-blue-500/20">
+    <main className="min-h-screen bg-[#f5f5f0] dark:bg-[#0a0a0a] font-[family-name:var(--font-sans)] selection:bg-blue-500/20">
       {/* ── Subtle warm noise texture ── */}
       <div className="fixed inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iLjc1IiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbHRlcj0idXJsKCNhKSIgb3BhY2l0eT0iLjAzIi8+PC9zdmc+')] opacity-30 pointer-events-none" />
 
@@ -677,12 +688,13 @@ export default function Dashboard() {
             filterMin={filterMin}
             setFilterMin={setFilterMin}
             filteredJobs={filteredJobs}
-            isLoadingJobs={isLoading}
+            isLoading={isLoading}
             jobs={jobs}
+            avgScore={avgScore}
             handleTrackJob={handleTrackJob}
             handleOptimize={handleOptimize}
-            FILTER_TIERS={FILTER_TIERS}
             filterCounts={filterCounts}
+            handleApplyJob={(job) => window.open(job.applyUrl, "_blank", "noopener,noreferrer")}
           />
         )}
 
@@ -862,37 +874,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Custom keyframes via inline style ── */}
-      <style jsx global>{`
-        @keyframes fadeUp {
-          from {
-            opacity: 0;
-            transform: translateY(16px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(24px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-        @keyframes gradient {
-          0%, 100% {
-            background-position: 0% center;
-          }
-          50% {
-            background-position: 100% center;
-          }
-        }
-      `}</style>
+
     </main>
     </ErrorBoundary>
   );

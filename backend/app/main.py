@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.endpoints import users, jobs, resume, applications, analytics, interview, notifications
 from app.services.scheduler import start_scheduler, stop_scheduler
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 

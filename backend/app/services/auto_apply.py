@@ -1,9 +1,10 @@
 import asyncio
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from docx import Document
-from playwright.async_api import async_playwright, Page, BrowserContext
+from playwright.async_api import async_playwright, Page
 
 # Location of the user's primary resume PDF, if it exists
 # (No longer hardcoded; passed dynamically via DB)
@@ -92,13 +93,28 @@ async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text:
         with os.fdopen(fd, 'wb') as f:
             f.write(resume_bytes)
 
+    temp_user_data_dir = tempfile.mkdtemp(prefix="playwright_profile_")
+    
     async with async_playwright() as p:
-        browser = await p.chromium.launch(
+        args = [
+            "--window-size=1280,800",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-extensions",
+            "--disable-default-apps",
+            "--disable-sync",
+            "--no-first-run",
+            "--incognito",
+            "--disable-popup-blocking=false", # Force popup blocking
+        ]
+        
+        context = await p.chromium.launch_persistent_context(
+            user_data_dir=temp_user_data_dir,
             headless=False,
-            args=["--window-size=1280,800", "--disable-blink-features=AutomationControlled"]
+            args=args,
+            viewport={"width": 1280, "height": 800},
+            accept_downloads=False
         )
-        context = await browser.new_context(viewport={"width": 1280, "height": 800})
-        page = await context.new_page()
+        page = context.pages[0] if context.pages else await context.new_page()
 
         try:
             await page.goto(apply_url, wait_until="domcontentloaded", timeout=60000)
@@ -143,9 +159,13 @@ async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text:
         except Exception as e:
             print(f"Playwright automation error: {e}")
         finally:
-            await browser.close()
+            await context.close()
 
     # Cleanup temp files outside the playwright context to ensure they're always cleaned
+    try:
+        shutil.rmtree(temp_user_data_dir, ignore_errors=True)
+    except Exception:
+        pass
     if temp_cover_letter_path and os.path.exists(temp_cover_letter_path):
         os.remove(temp_cover_letter_path)
     if temp_resume_path and os.path.exists(temp_resume_path):

@@ -18,8 +18,8 @@ class JobListing(Base):
     salary_max = Column(Integer, nullable=True)
     description = Column(Text)
     apply_url = Column(String(1024))
-    embedding = Column(Vector(384))
-    scraped_at = Column(DateTime(timezone=True), server_default=func.now())
+    embedding = Column(Vector(768))  # Gemini text-embedding-004 (768 dims)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
 
 Index("ix_job_listings_embedding", JobListing.embedding, postgresql_using="hnsw", postgresql_with={"m": 16, "ef_construction": 64}, postgresql_ops={"embedding": "vector_cosine_ops"})
@@ -42,4 +42,3 @@ class JobScore(Base):
     __table_args__ = (
         UniqueConstraint('user_id', 'listing_id', name='uq_user_listing_score'),
     )
-
