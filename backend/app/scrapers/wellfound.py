@@ -1,10 +1,16 @@
-import httpx
-import urllib.parse
 import asyncio
+import logging
+import re
+import urllib.parse
+import uuid
+
+import httpx
 from bs4 import BeautifulSoup
+
 from app.schemas.jobs import JobListingCreate
 from app.utils.http import get_random_headers
-import uuid
+
+logger = logging.getLogger(__name__)
 
 async def _fetch_wellfound_job_description(client: httpx.AsyncClient, url: str) -> str | None:
     """Fetch full job description from a Wellfound job page."""
@@ -44,7 +50,7 @@ async def scrape_wellfound_jobs(query: str, location: str, max_results: int = 10
             try:
                 response = await client.get(url, headers=get_random_headers())
                 if response.status_code != 200:
-                    print(f"Wellfound search returned {response.status_code}")
+                    logger.warning(f"[wellfound] Search page returned HTTP {response.status_code}")
                     return []
                 
                 soup = BeautifulSoup(response.text, 'html.parser')
@@ -82,7 +88,6 @@ async def scrape_wellfound_jobs(query: str, location: str, max_results: int = 10
                     salary_el = card.find('span', class_='styles_compensation__3ZqH-')
                     if salary_el:
                         salary_text = salary_el.text.strip().replace(',', '').replace('k', '000').replace('K', '000')
-                        import re
                         numbers = [int(n) for n in re.findall(r'\d+', salary_text)]
                         if len(numbers) >= 2:
                             salary_min = min(numbers)
@@ -106,7 +111,7 @@ async def scrape_wellfound_jobs(query: str, location: str, max_results: int = 10
                         "external_id": external_id,
                     })
 
-                print(f"Parsed {len(parsed)} job cards from Wellfound")
+                logger.info(f"[wellfound] Parsed {len(parsed)} job cards")
 
                 # Fetch full descriptions concurrently
                 semaphore = asyncio.Semaphore(3)
@@ -141,13 +146,13 @@ async def scrape_wellfound_jobs(query: str, location: str, max_results: int = 10
                     if isinstance(r, JobListingCreate):
                         jobs.append(r)
                     elif isinstance(r, Exception):
-                        print(f"Error fetching Wellfound job detail: {r}")
+                        logger.warning(f"[wellfound] Error fetching job detail: {r}")
 
             except Exception as e:
-                print(f"Error executing Wellfound search: {e}")
+                logger.error(f"[wellfound] Search execution failed: {e}", exc_info=True)
 
     except Exception as e:
-        print(f"Failed to scrape Wellfound: {e}")
+        logger.error(f"[wellfound] Scraper failed: {e}", exc_info=True)
 
-    print(f"Successfully scraped {len(jobs)} jobs from Wellfound")
+    logger.info(f"[wellfound] Scraped {len(jobs)} jobs")
     return jobs

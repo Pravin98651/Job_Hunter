@@ -133,12 +133,18 @@ def unschedule_user(user_id: str):
 def start_scheduler():
     """Start the APScheduler for all enabled users (called on startup)."""
     db = SessionLocal()
+    scheduled_count = 0
     try:
-        active_configs = db.query(NotificationSettings).filter(NotificationSettings.enabled == True).all()
+        active_configs = db.query(NotificationSettings).filter(NotificationSettings.enabled.is_(True)).all()
         for c in active_configs:
-            schedule_user(str(c.user_id), c.scrape_interval_hours)
+            try:
+                schedule_user(str(c.user_id), c.scrape_interval_hours)
+                scheduled_count += 1
+            except Exception as e:
+                logger.error(f"[scheduler] Failed to schedule user {c.user_id}: {e}")
     finally:
         db.close()
+    logger.info(f"[scheduler] Startup complete — {scheduled_count} user(s) scheduled")
 
 def stop_scheduler():
     if scheduler.running:

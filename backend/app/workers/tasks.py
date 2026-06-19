@@ -1,17 +1,11 @@
-from app.core.celery_app import celery_app
-from app.scrapers.linkedin import scrape_linkedin_jobs
-import asyncio
+"""
+Legacy worker stubs — Celery was replaced by APScheduler.
 
-@celery_app.task
-def scrape_linkedin_task(query: str, location: str):
-    """
-    Celery task to run the async Playwright scraper.
-    """
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-    results = loop.run_until_complete(scrape_linkedin_jobs(query, location))
-    return f"Scraped {len(results)} jobs"
+This file is kept for reference but is NOT imported anywhere.
+The scraping pipeline runs via app/services/scheduler.py (APScheduler)
+and app/agents/orchestrator.py (LangGraph).
+"""
+
+# If Celery support is needed in the future, add:
+# from app.core.celery_app import celery_app
+# and configure a Redis/RabbitMQ broker in settings.

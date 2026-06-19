@@ -65,7 +65,7 @@ def get_high_score_jobs(min_score: int = 80, limit: int = 10, user_id: str = "")
             db.query(JobScore, JobListing)
             .join(JobListing, JobScore.listing_id == JobListing.id)
             .filter(JobScore.match_score >= min_score)
-            .filter(JobScore.notified == False)
+            .filter(JobScore.notified.is_(False))
             .filter(JobScore.user_id == user_id)
         )
             
@@ -87,14 +87,23 @@ def get_high_score_jobs(min_score: int = 80, limit: int = 10, user_id: str = "")
 
 
 def mark_as_notified(score_ids: list[str]):
-    """Mark job scores as notified so they aren't re-sent."""
+    """Mark job scores as notified so they aren't re-sent. Uses a single batch UPDATE."""
+    if not score_ids:
+        return
     db = SessionLocal()
     try:
-        for sid in score_ids:
-            score = db.query(JobScore).filter(JobScore.id == sid).first()
-            if score:
-                score.notified = True
+        from sqlalchemy import update
+        # Single batch UPDATE instead of N individual SELECT+UPDATE queries
+        db.execute(
+            update(JobScore)
+            .where(JobScore.id.in_(score_ids))
+            .values(notified=True)
+        )
         db.commit()
+        logger.info(f"Marked {len(score_ids)} scores as notified")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to mark scores as notified: {e}", exc_info=True)
     finally:
         db.close()
 

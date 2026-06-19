@@ -6,7 +6,6 @@ pipeline (bookmarked → applied → interviewing → rejected/offer) and
 uses Gemini AI to generate tailored cover letters.
 """
 
-import os
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks

@@ -1,11 +1,16 @@
-import httpx
-import urllib.parse
 import asyncio
+import logging
+import re
+import urllib.parse
+import uuid
+
+import httpx
 from bs4 import BeautifulSoup
+
 from app.schemas.jobs import JobListingCreate
 from app.utils.http import get_random_headers
-import uuid
-import json
+
+logger = logging.getLogger(__name__)
 
 async def _fetch_glassdoor_job_description(client: httpx.AsyncClient, url: str) -> str | None:
     """Fetch full job description from a Glassdoor job page."""
@@ -45,7 +50,7 @@ async def scrape_glassdoor_jobs(query: str, location: str, max_results: int = 10
             try:
                 response = await client.get(url, headers=get_random_headers())
                 if response.status_code != 200:
-                    print(f"Glassdoor search returned {response.status_code}")
+                    logger.warning(f"[glassdoor] Search page returned HTTP {response.status_code}")
                     return []
                 
                 soup = BeautifulSoup(response.text, 'html.parser')
@@ -74,7 +79,6 @@ async def scrape_glassdoor_jobs(query: str, location: str, max_results: int = 10
                     salary_el = card.find('div', attrs={'data-test': 'detailSalary'})
                     if salary_el:
                         salary_text = salary_el.text.strip().replace(',', '').replace('K', '000')
-                        import re
                         numbers = [int(n) for n in re.findall(r'\d+', salary_text)]
                         if len(numbers) >= 2:
                             salary_min = min(numbers)
@@ -97,7 +101,7 @@ async def scrape_glassdoor_jobs(query: str, location: str, max_results: int = 10
                         "external_id": external_id,
                     })
 
-                print(f"Parsed {len(parsed)} job cards from Glassdoor")
+                logger.info(f"[glassdoor] Parsed {len(parsed)} job cards")
 
                 # Fetch full descriptions concurrently
                 semaphore = asyncio.Semaphore(3)
@@ -132,16 +136,16 @@ async def scrape_glassdoor_jobs(query: str, location: str, max_results: int = 10
                     if isinstance(r, JobListingCreate):
                         jobs.append(r)
                     elif isinstance(r, Exception):
-                        print(f"Error fetching Glassdoor job detail: {r}")
+                        logger.warning(f"[glassdoor] Error fetching job detail: {r}")
 
             except Exception as e:
-                print(f"Error executing Glassdoor search: {e}")
+                logger.error(f"[glassdoor] Search execution failed: {e}", exc_info=True)
 
     except Exception as e:
-        print(f"Failed to scrape Glassdoor: {e}")
+        logger.error(f"[glassdoor] Scraper failed: {e}", exc_info=True)
 
     if len(jobs) == 0:
-        print("Glassdoor scraper returned 0 jobs (likely blocked or no results).")
+        logger.info("[glassdoor] Returned 0 jobs (likely blocked by bot protection or no results)")
 
-    print(f"Successfully scraped {len(jobs)} jobs from Glassdoor")
+    logger.info(f"[glassdoor] Scraped {len(jobs)} jobs")
     return jobs

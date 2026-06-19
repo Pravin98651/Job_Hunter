@@ -1,9 +1,8 @@
-import os
-import json
-import re
+import logging
 from pydantic import BaseModel, Field
-from app.core.config import settings
 from app.core.llm import client as _client, generate_json_response
+
+logger = logging.getLogger(__name__)
 
 class JobScoreResult(BaseModel):
     match_score: int = Field(description="Match score from 0 to 100")
@@ -20,7 +19,7 @@ def score_job_listing(job_description: str, user_profile: dict) -> JobScoreResul
     Uses a detailed prompt that considers skills, experience, location, and salary.
     """
     if not _client:
-        print("WARNING: Gemini API client not configured. Returning mock score.")
+        logger.warning("Gemini API client not configured. Using keyword-based fallback scorer.")
         return _mock_score(job_description, user_profile)
 
     prompt = f"""You are an expert AI career coach and recruiter. Your task is to evaluate how well a Job Description matches a User Profile.
@@ -64,8 +63,7 @@ Return ONLY a valid JSON object (no markdown, no explanation outside the JSON):
         data['match_score'] = max(0, min(100, int(data.get('match_score', 50))))
         return JobScoreResult(**data)
     except Exception as e:
-        import logging
-        logging.error(f"Gemini scoring failed: {e}", exc_info=True)
+        logger.error(f"Gemini scoring failed: {e}", exc_info=True)
         return _mock_score(job_description, user_profile)
 
 

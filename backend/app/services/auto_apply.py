@@ -1,13 +1,42 @@
 import asyncio
+import ipaddress
+import logging
 import os
 import shutil
+import socket
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
+
 from docx import Document
 from playwright.async_api import async_playwright, Page
 
-# Location of the user's primary resume PDF, if it exists
-# (No longer hardcoded; passed dynamically via DB)
+logger = logging.getLogger(__name__)
+
+
+def _validate_apply_url(url: str) -> None:
+    """
+    Validate that the apply URL is not pointing to a private/loopback/reserved
+    address (SSRF prevention). Raises ValueError if invalid.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Invalid URL scheme: {parsed.scheme}")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("URL has no hostname")
+    try:
+        resolved_ips = socket.getaddrinfo(hostname, None)
+    except socket.gaierror as e:
+        raise ValueError(f"Cannot resolve hostname '{hostname}': {e}")
+    for _, _, _, _, sockaddr in resolved_ips:
+        ip_str = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+                raise ValueError(f"URL resolves to restricted IP: {ip_str}")
+        except ValueError as e:
+            raise ValueError(f"Invalid resolved IP: {ip_str} — {e}")
 
 async def fill_heuristic_fields(page: Page, profile: dict):
     """
@@ -71,7 +100,14 @@ async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text:
     filling, and waits for the user to close the browser manually.
     """
     if not apply_url or not apply_url.startswith("http"):
-        print(f"Invalid apply_url provided: {apply_url}")
+        logger.warning(f"[auto_apply] Invalid apply_url provided: {apply_url!r}")
+        return
+
+    # SSRF validation — prevent the browser from navigating to internal services
+    try:
+        _validate_apply_url(apply_url)
+    except ValueError as e:
+        logger.warning(f"[auto_apply] Blocked unsafe URL: {e}")
         return
 
     # Create temporary cover letter file if text is provided
@@ -153,11 +189,11 @@ async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text:
             # Wait for 5 minutes (300000 ms) instead of indefinitely
             try:
                 await page.wait_for_event("close", timeout=300000)
-            except Exception as e:
-                print("Playwright session timed out or closed.")
+            except Exception:
+                logger.info("[auto_apply] Playwright session timed out or user closed the browser")
             
         except Exception as e:
-            print(f"Playwright automation error: {e}")
+            logger.error(f"[auto_apply] Playwright automation error: {e}", exc_info=True)
         finally:
             await context.close()
 

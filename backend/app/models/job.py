@@ -22,6 +22,13 @@ class JobListing(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
 
+    __table_args__ = (
+        # Prevents duplicate job listings when vector dedup is unavailable.
+        # The orchestrator checks this before inserting; the DB constraint
+        # is the last-resort guard against race conditions.
+        UniqueConstraint('source', 'external_id', name='uq_job_source_external_id'),
+    )
+
 Index("ix_job_listings_embedding", JobListing.embedding, postgresql_using="hnsw", postgresql_with={"m": 16, "ef_construction": 64}, postgresql_ops={"embedding": "vector_cosine_ops"})
 
 
