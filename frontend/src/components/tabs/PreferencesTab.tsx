@@ -20,7 +20,7 @@ interface PreferencesTabProps {
   handleDrop: (e: React.DragEvent) => void;
   isDragging: boolean;
   setIsDragging: (val: boolean) => void;
-  fileInputRef: React.RefObject<HTMLInputElement>;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
   showToast: (message: string, type?: Toast["type"]) => void;
 }
 
