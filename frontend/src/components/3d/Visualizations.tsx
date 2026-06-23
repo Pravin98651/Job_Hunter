@@ -113,7 +113,7 @@ export function ParticleConstellation({ count = 80 }: { count?: number }) {
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 w-full h-full pointer-events-none"
+      className="absolute inset-0 w-full h-full pointer-events-none opacity-30 dark:opacity-100"
       aria-hidden="true"
     />
   );
@@ -148,7 +148,7 @@ export function FloatingOrb({
 
   return (
     <div
-      className="absolute pointer-events-none rounded-full will-change-transform"
+      className="absolute pointer-events-none rounded-full will-change-transform opacity-40 dark:opacity-100"
       style={{
         width: size,
         height: size,

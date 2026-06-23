@@ -612,7 +612,7 @@ export default function Dashboard() {
 
       {/* ── Top Navigation Bar (Pill) ── */}
       <div className="fixed top-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
-        <nav className="pointer-events-auto bg-card/60 backdrop-blur-2xl border border-border shadow-2xl rounded-full px-2 py-2 flex items-center gap-4 sm:gap-8 transition-all hover:bg-card/80 hover:border-primary/30">
+        <nav className="pointer-events-auto bg-card shadow-md backdrop-blur-2xl border border-border shadow-2xl rounded-full px-2 py-2 flex items-center gap-4 sm:gap-8 transition-all hover:bg-card/80 hover:border-primary/30">
           <div className="flex items-center gap-2 pl-4 pr-2">
             <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-primary-foreground" />

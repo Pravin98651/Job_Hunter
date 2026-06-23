@@ -35,7 +35,7 @@ export function AnalyticsTab({
           {/* Pipeline Funnel + Sources Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Pipeline Stats */}
-            <div className="bg-card/40 backdrop-blur-2xl border border-border rounded-2xl p-6 shadow-sm">
+            <div className="bg-card shadow-sm backdrop-blur-2xl border border-border rounded-2xl p-6 shadow-sm">
               <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                 <ExternalLink className="w-4 h-4" />
                 Pipeline Funnel
@@ -62,7 +62,7 @@ export function AnalyticsTab({
             </div>
 
             {/* Job Sources */}
-            <div className="bg-card/40 backdrop-blur-2xl border border-border rounded-2xl p-6 shadow-sm">
+            <div className="bg-card shadow-sm backdrop-blur-2xl border border-border rounded-2xl p-6 shadow-sm">
               <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                 <Search className="w-4 h-4" />
                 Job Sources
@@ -87,7 +87,7 @@ export function AnalyticsTab({
           </div>
 
           {/* Skill Gaps */}
-          <div className="bg-card/40 backdrop-blur-2xl border border-border rounded-2xl p-6 shadow-sm">
+          <div className="bg-card shadow-sm backdrop-blur-2xl border border-border rounded-2xl p-6 shadow-sm">
             <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
               <Sparkles className="w-4 h-4" />
               Top Skill Gaps — Learn These Next
@@ -109,7 +109,7 @@ export function AnalyticsTab({
           </div>
 
           {/* Score Trends */}
-          <div className="bg-card/40 backdrop-blur-2xl border border-border rounded-2xl p-6 shadow-sm">
+          <div className="bg-card shadow-sm backdrop-blur-2xl border border-border rounded-2xl p-6 shadow-sm">
             <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
               <Briefcase className="w-4 h-4" />
               Match Score Trends

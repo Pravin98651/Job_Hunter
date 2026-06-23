@@ -98,7 +98,7 @@ export function MatchesTab({
               className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 border ${
                 filterMin === tier.min
                   ? "bg-foreground text-background border-foreground shadow-sm"
-                  : "bg-card/50 text-muted-foreground border-border hover:border-primary/50"
+                  : "bg-card shadow-sm text-muted-foreground border-border hover:border-primary/50"
               }`}
             >
               {tier.label}
@@ -127,7 +127,7 @@ export function MatchesTab({
             { label: "Avg Score", value: `${avgScore}%`, sub: "average" },
             { label: "Companies", value: new Set(jobs.map((j) => j.company)).size, sub: "unique" },
           ].map((s) => (
-            <div key={s.label} className="bg-card/40 backdrop-blur-xl border border-border rounded-xl py-3 px-4 text-center">
+            <div key={s.label} className="bg-card shadow-sm backdrop-blur-xl border border-border rounded-xl py-3 px-4 text-center">
               <div className="text-lg font-bold text-foreground">{s.value}</div>
               <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{s.label} · {s.sub}</div>
             </div>
@@ -139,11 +139,11 @@ export function MatchesTab({
       {isLoading ? (
         <div className="flex flex-col gap-6">
           {[1, 2].map((i) => (
-            <div key={i} className={`h-72 bg-card/30 backdrop-blur-xl rounded-[28px] border border-border animate-pulse ${i === 2 ? "opacity-60" : ""}`} />
+            <div key={i} className={`h-72 bg-card shadow-sm backdrop-blur-xl rounded-[28px] border border-border animate-pulse ${i === 2 ? "opacity-60" : ""}`} />
           ))}
         </div>
       ) : filteredJobs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 px-8 bg-card/40 backdrop-blur-2xl rounded-2xl border border-border text-center">
+        <div className="flex flex-col items-center justify-center py-20 px-8 bg-card shadow-sm backdrop-blur-2xl rounded-2xl border border-border text-center">
           <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-5 border border-primary/20">
             <Search className="w-8 h-8" />
           </div>
