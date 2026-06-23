@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScoreBar } from './ScoreBar';
+import { ScoreRing3D } from '@/components/3d/Visualizations';
 import { MapPin, DollarSign, Sparkles, ChevronDown, BookmarkPlus, ExternalLink, Wrench, CircleDot } from 'lucide-react';
 
 interface JobCardProps {
@@ -66,16 +66,10 @@ export function JobCard(props: JobCardProps) {
             )}
           </div>
 
-          {/* Score badge */}
-          <div className={`shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-2xl ${scoreColors.ring} ring-2 bg-background shadow-sm`}>
-            <span className={`text-2xl font-black leading-none ${scoreColors.text}`}>{props.matchScore}</span>
-            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">score</span>
+          {/* Score Ring 3D */}
+          <div className="shrink-0 relative mt-[-10px] mr-[-10px]">
+            <ScoreRing3D score={props.matchScore} size={80} strokeWidth={6} />
           </div>
-        </div>
-
-        {/* Score bar */}
-        <div className="mt-5">
-          <ScoreBar score={props.matchScore} />
         </div>
 
         {/* AI Analysis — collapsible */}

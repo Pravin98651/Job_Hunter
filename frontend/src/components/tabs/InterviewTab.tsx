@@ -35,49 +35,49 @@ export function InterviewTab({
   return (
     <div className="animate-[fadeUp_0.5s_ease-out]">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">Interview Prep</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Generate AI-powered interview questions and research your target company.</p>
+        <h2 className="text-2xl font-bold text-foreground tracking-tight">Interview Prep</h2>
+        <p className="text-sm text-muted-foreground mt-1">Generate AI-powered interview questions and research your target company.</p>
       </div>
 
       {/* Input form */}
-      <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm mb-6">
+      <div className="bg-card/40 backdrop-blur-2xl border border-border rounded-2xl p-6 shadow-sm mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Job Title</label>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Job Title</label>
             <input
               type="text"
               value={interviewJobTitle}
               onChange={(e) => setInterviewJobTitle(e.target.value)}
               placeholder="e.g. Senior AI Engineer"
-              className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/30"
+              className="w-full bg-card border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/30"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Company</label>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Company</label>
             <input
               type="text"
               value={interviewCompany}
               onChange={(e) => setInterviewCompany(e.target.value)}
               placeholder="e.g. Google"
-              className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/30"
+              className="w-full bg-card border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/30"
             />
           </div>
         </div>
         <div className="mb-4">
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Job Description (optional, improves results)</label>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Job Description (optional, improves results)</label>
           <textarea
             value={interviewJobDesc}
             onChange={(e) => setInterviewJobDesc(e.target.value)}
             placeholder="Paste the full job description here for best results..."
             rows={3}
-            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
+            className="w-full bg-card border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
           />
         </div>
         <div className="flex gap-3">
           <button
             onClick={handleGenerateQuestions}
             disabled={isLoadingInterview}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-slate-900 text-white hover:bg-blue-600 dark:bg-white dark:text-slate-900 dark:hover:bg-blue-500 dark:hover:text-white transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all disabled:opacity-50"
           >
             {isLoadingInterview ? (
               <><div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Generating...</>
@@ -102,8 +102,8 @@ export function InterviewTab({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Interview Questions */}
         {interviewQuestions.length > 0 && (
-          <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
-            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Likely Interview Questions</h3>
+          <div className="bg-card/40 backdrop-blur-2xl border border-border rounded-2xl p-6 shadow-sm">
+            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4">Likely Interview Questions</h3>
             <div className="space-y-4">
               {interviewQuestions.map((q, i) => (
                 <div key={i} className="relative pl-4 border-l-2 border-blue-200 dark:border-blue-800">
@@ -112,8 +112,8 @@ export function InterviewTab({
                     q.type === "behavioral" ? "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400" :
                     "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400"
                   }`}>{q.type}</span>
-                  <p className="text-sm font-semibold text-slate-800 dark:text-white mb-1">{q.question}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 italic">💡 {q.tip}</p>
+                  <p className="text-sm font-semibold text-foreground mb-1">{q.question}</p>
+                  <p className="text-xs text-muted-foreground italic">💡 {q.tip}</p>
                 </div>
               ))}
             </div>
@@ -122,28 +122,28 @@ export function InterviewTab({
 
         {/* Company Brief */}
         {companyBrief && (
-          <div className="bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
-            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Company Research Brief — {interviewCompany}</h3>
+          <div className="bg-card/40 backdrop-blur-2xl border border-border rounded-2xl p-6 shadow-sm">
+            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4">Company Research Brief — {interviewCompany}</h3>
             <div className="space-y-4">
               <div>
                 <h4 className="text-xs font-bold text-blue-500 uppercase mb-1">Overview</h4>
-                <p className="text-sm text-slate-700 dark:text-slate-300">{companyBrief.overview}</p>
+                <p className="text-sm text-foreground/90">{companyBrief.overview}</p>
               </div>
               <div>
                 <h4 className="text-xs font-bold text-emerald-500 uppercase mb-1">Culture</h4>
-                <p className="text-sm text-slate-700 dark:text-slate-300">{companyBrief.culture}</p>
+                <p className="text-sm text-foreground/90">{companyBrief.culture}</p>
               </div>
               <div>
                 <h4 className="text-xs font-bold text-violet-500 uppercase mb-1">Recent News</h4>
-                <ul className="space-y-1">{companyBrief.recentNews.map((n, i) => <li key={i} className="text-sm text-slate-600 dark:text-slate-400 flex gap-2"><span>•</span>{n}</li>)}</ul>
+                <ul className="space-y-1">{companyBrief.recentNews.map((n, i) => <li key={i} className="text-sm text-slate-600 dark:text-muted-foreground flex gap-2"><span>•</span>{n}</li>)}</ul>
               </div>
               <div>
                 <h4 className="text-xs font-bold text-amber-500 uppercase mb-1">Interview Tips</h4>
-                <ul className="space-y-1">{companyBrief.interviewTips.map((t, i) => <li key={i} className="text-sm text-slate-600 dark:text-slate-400 flex gap-2"><span>💡</span>{t}</li>)}</ul>
+                <ul className="space-y-1">{companyBrief.interviewTips.map((t, i) => <li key={i} className="text-sm text-slate-600 dark:text-muted-foreground flex gap-2"><span>💡</span>{t}</li>)}</ul>
               </div>
               <div>
                 <h4 className="text-xs font-bold text-rose-500 uppercase mb-1">Glassdoor Sentiment</h4>
-                <p className="text-sm text-slate-700 dark:text-slate-300">{companyBrief.glassdoorSentiment}</p>
+                <p className="text-sm text-foreground/90">{companyBrief.glassdoorSentiment}</p>
               </div>
             </div>
           </div>

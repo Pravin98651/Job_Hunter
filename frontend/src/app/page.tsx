@@ -22,6 +22,7 @@ import { PreferencesTab } from "@/components/tabs/PreferencesTab";
 import { PipelineTab } from "@/components/tabs/PipelineTab";
 import { AnalyticsTab } from "@/components/tabs/AnalyticsTab";
 import { InterviewTab } from "@/components/tabs/InterviewTab";
+import { ParticleConstellation, FloatingOrb, StatCard3D } from "@/components/3d/Visualizations";
 
 import {
   Job,
@@ -572,9 +573,16 @@ export default function Dashboard() {
   /* ════════════════════════════ RENDER ══════════════════════════ */
   return (
     <ErrorBoundary>
-    <main className="min-h-screen bg-[#f5f5f0] dark:bg-[#0a0a0a] font-[family-name:var(--font-sans)] selection:bg-blue-500/20">
+    <main className="min-h-screen bg-[#f5f5f0] dark:bg-[#0a0a0a] font-[family-name:var(--font-sans)] selection:bg-blue-500/20 relative">
+      {/* ── 3D Background Elements ── */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <ParticleConstellation count={60} />
+        <FloatingOrb size={400} color="violet" x={-300} y={-200} delay={0} blur={100} />
+        <FloatingOrb size={300} color="blue" x={400} y={100} delay={2} blur={80} />
+      </div>
+
       {/* ── Subtle warm noise texture ── */}
-      <div className="fixed inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iLjc1IiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbHRlcj0idXJsKCNhKSIgb3BhY2l0eT0iLjAzIi8+PC9zdmc+')] opacity-30 pointer-events-none" />
+      <div className="fixed inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iLjc1IiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbHRlcj0idXJsKCNhKSIgb3BhY2l0eT0iLjAzIi8+PC9zdmc+')] opacity-30 pointer-events-none z-0" />
 
       {/* ── Toast notifications ── */}
       <div className="fixed top-6 right-6 z-50 flex flex-col gap-3">
@@ -602,17 +610,17 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* ── Top Navigation Bar ── */}
-      <nav className="sticky top-0 z-40 w-full bg-background/80 backdrop-blur-2xl border-b border-border shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-primary" />
+      {/* ── Top Navigation Bar (Pill) ── */}
+      <div className="fixed top-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
+        <nav className="pointer-events-auto bg-card/60 backdrop-blur-2xl border border-border shadow-2xl rounded-full px-2 py-2 flex items-center gap-4 sm:gap-8 transition-all hover:bg-card/80 hover:border-primary/30">
+          <div className="flex items-center gap-2 pl-4 pr-2">
+            <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-heading font-black tracking-tight hidden sm:block">JobHunt AI</span>
+            <span className="text-base font-heading font-black tracking-tight hidden md:block">JobHunt</span>
           </div>
           
-          <div className="flex bg-muted/50 p-1 rounded-xl border border-border overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1">
             {(["matches", "pipeline", "analytics", "interview", "preferences"] as const).map((tab) => (
               <button
                 key={tab}
@@ -621,10 +629,10 @@ export default function Dashboard() {
                   if (tab === "pipeline") fetchTrackedApps();
                   if (tab === "analytics") fetchAnalytics();
                 }}
-                className={`relative px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                className={`relative px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-2 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                   activeTab === tab
-                    ? "bg-background text-foreground shadow-sm ring-1 ring-border"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    ? "bg-foreground text-background shadow-md"
+                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
                 }`}
               >
                 {tab === "matches" && <Search className="w-4 h-4" />}
@@ -632,47 +640,61 @@ export default function Dashboard() {
                 {tab === "analytics" && <BarChart3 className="w-4 h-4" />}
                 {tab === "interview" && <Presentation className="w-4 h-4" />}
                 {tab === "preferences" && <Settings className="w-4 h-4" />}
-                <span className="hidden md:inline capitalize">{tab}</span>
+                <span className="hidden lg:inline capitalize">{tab}</span>
               </button>
             ))}
           </div>
-        </div>
-      </nav>
+        </nav>
+      </div>
 
-      <div className="max-w-6xl mx-auto relative z-10 px-4 sm:px-6 lg:px-8 pb-24 pt-10">
+      <div className="max-w-7xl mx-auto relative z-10 px-4 sm:px-6 lg:px-8 pb-24 pt-32">
         
-        {/* ══════════════════════ HERO SECTION ══════════════════════ */}
-        <header className="mb-14 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide uppercase bg-primary/10 text-primary border border-primary/20 mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            Autonomous Career Agent
-          </div>
-          <h1 className="text-5xl sm:text-6xl font-heading font-black tracking-tight leading-[1.1] text-foreground mb-4">
-            Find the perfect role, <br className="hidden sm:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-violet-500">
-              automatically.
-            </span>
-          </h1>
-          <p className="text-muted-foreground text-lg sm:text-xl font-medium max-w-2xl mx-auto leading-relaxed">
-            Your AI agent that scrapes, scores, and ranks jobs based on your unique resume.
-          </p>
-
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-3 sm:gap-6 max-w-xl mx-auto mt-10">
-            {[
-              { label: "Jobs Found", value: jobs.length, icon: Briefcase },
-              { label: "Avg Match", value: `${avgScore}%`, icon: Sparkles },
-              { label: "Searches", value: searchCount, icon: Search },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="bg-card/50 backdrop-blur-sm border border-border rounded-2xl py-5 px-4 text-center shadow-sm flex flex-col items-center justify-center group hover:border-primary/30 transition-colors"
-              >
-                <stat.icon className="w-5 h-5 text-muted-foreground mb-2 group-hover:text-primary transition-colors" />
-                <div className="text-2xl sm:text-3xl font-heading font-black text-foreground">{stat.value}</div>
-                <div className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-widest mt-1">{stat.label}</div>
+        {/* ══════════════════════ BENTO GRID HERO ══════════════════════ */}
+        <header className="mb-14">
+          <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6 auto-rows-[140px]">
+            
+            {/* Main Title Tile (Span 4 cols, 2 rows) */}
+            <div className="md:col-span-4 lg:col-span-4 row-span-2 relative overflow-hidden rounded-3xl bg-card border border-border p-8 sm:p-10 flex flex-col justify-between group">
+              <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 opacity-50 group-hover:opacity-100 transition-opacity duration-1000" />
+              <div className="relative z-10">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase bg-primary/10 text-primary mb-6 ring-1 ring-primary/20 shadow-inner">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_var(--primary)]" />
+                  Agent Active
+                </div>
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-heading font-black tracking-tight leading-[1.05] text-foreground">
+                  Your autonomous <br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">career agent.</span>
+                </h1>
+                <p className="text-muted-foreground text-lg sm:text-xl font-medium mt-6 max-w-lg leading-relaxed">
+                  We scrape, analyze, and rank the perfect roles specifically tailored to your resume profile.
+                </p>
               </div>
-            ))}
+            </div>
+
+            {/* Stat Tile 1 (Jobs Found) */}
+            <div className="md:col-span-2 lg:col-span-2 row-span-1 rounded-3xl bg-card border border-border p-6 flex flex-col justify-center relative overflow-hidden group hover:border-primary/50 transition-colors">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="flex items-center justify-between mb-2 relative z-10">
+                <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Jobs Found</span>
+                <Briefcase className="w-5 h-5 text-blue-500" />
+              </div>
+              <div className="text-4xl font-black font-heading tracking-tighter text-foreground relative z-10">
+                {jobs.length}
+              </div>
+            </div>
+
+            {/* Stat Tile 2 (Avg Match) */}
+            <div className="md:col-span-2 lg:col-span-2 row-span-1 rounded-3xl bg-card border border-border p-6 flex flex-col justify-center relative overflow-hidden group hover:border-primary/50 transition-colors">
+               <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="flex items-center justify-between mb-2 relative z-10">
+                <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Avg Match</span>
+                <Sparkles className="w-5 h-5 text-violet-500" />
+              </div>
+              <div className="text-4xl font-black font-heading tracking-tighter text-foreground relative z-10">
+                {avgScore}%
+              </div>
+            </div>
+
           </div>
         </header>
 

@@ -89,20 +89,20 @@ export function MatchesTab({
         </div>
 
         {/* Filter chips */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mr-1">Filter:</span>
+        <div className="flex items-center gap-2 flex-wrap mt-4">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Filter:</span>
           {filterCounts.map((tier) => (
             <button
               key={tier.label}
               onClick={() => setFilterMin(tier.min)}
               className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 border ${
                 filterMin === tier.min
-                  ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white shadow-sm"
-                  : "bg-white/70 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border-slate-200/60 dark:border-slate-700/50 hover:border-slate-300 dark:hover:border-slate-600"
+                  ? "bg-foreground text-background border-foreground shadow-sm"
+                  : "bg-card/50 text-muted-foreground border-border hover:border-primary/50"
               }`}
             >
               {tier.label}
-              <span className={`ml-1.5 ${filterMin === tier.min ? "text-white/70 dark:text-slate-900/60" : "text-slate-400 dark:text-slate-500"}`}>
+              <span className={`ml-1.5 ${filterMin === tier.min ? "text-background/70" : "text-muted-foreground/60"}`}>
                 {tier.count}
               </span>
             </button>
@@ -110,7 +110,7 @@ export function MatchesTab({
 
           {/* Live status */}
           <div className="ml-auto flex items-center gap-2">
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-500">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Live
             </span>
@@ -127,9 +127,9 @@ export function MatchesTab({
             { label: "Avg Score", value: `${avgScore}%`, sub: "average" },
             { label: "Companies", value: new Set(jobs.map((j) => j.company)).size, sub: "unique" },
           ].map((s) => (
-            <div key={s.label} className="bg-white/50 dark:bg-slate-900/40 backdrop-blur-xl border border-white/50 dark:border-white/[0.04] rounded-xl py-3 px-4 text-center">
-              <div className="text-lg font-bold text-slate-800 dark:text-white">{s.value}</div>
-              <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{s.label} · {s.sub}</div>
+            <div key={s.label} className="bg-card/40 backdrop-blur-xl border border-border rounded-xl py-3 px-4 text-center">
+              <div className="text-lg font-bold text-foreground">{s.value}</div>
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{s.label} · {s.sub}</div>
             </div>
           ))}
         </div>
@@ -139,18 +139,18 @@ export function MatchesTab({
       {isLoading ? (
         <div className="flex flex-col gap-6">
           {[1, 2].map((i) => (
-            <div key={i} className={`h-72 bg-white/40 dark:bg-slate-800/30 backdrop-blur-xl rounded-[28px] border border-white/40 dark:border-white/[0.04] animate-pulse ${i === 2 ? "opacity-60" : ""}`} />
+            <div key={i} className={`h-72 bg-card/30 backdrop-blur-xl rounded-[28px] border border-border animate-pulse ${i === 2 ? "opacity-60" : ""}`} />
           ))}
         </div>
       ) : filteredJobs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 px-8 bg-white/50 dark:bg-slate-900/40 backdrop-blur-2xl rounded-2xl border border-white/50 dark:border-white/[0.06] text-center">
-          <div className="w-16 h-16 bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400 rounded-2xl flex items-center justify-center mb-5 border border-blue-100 dark:border-blue-500/20">
+        <div className="flex flex-col items-center justify-center py-20 px-8 bg-card/40 backdrop-blur-2xl rounded-2xl border border-border text-center">
+          <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-5 border border-primary/20">
             <Search className="w-8 h-8" />
           </div>
-          <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">
+          <h3 className="text-xl font-bold text-foreground tracking-tight">
             {jobs.length > 0 ? "No jobs match this filter" : "No scored jobs yet"}
           </h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-sm leading-relaxed">
+          <p className="text-sm text-muted-foreground mt-2 max-w-sm leading-relaxed">
             {jobs.length > 0
               ? "Try lowering your filter threshold to see more results."
               : "Trigger a scrape to send the AI agent out to find and evaluate roles for you."}

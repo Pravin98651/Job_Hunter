@@ -44,8 +44,8 @@ export function PreferencesTab({
   return (
     <div className="animate-[fadeUp_0.5s_ease-out]">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">Agent Preferences</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Configure how the AI agent searches and evaluates job matches.</p>
+        <h2 className="text-2xl font-bold text-foreground tracking-tight">Agent Preferences</h2>
+        <p className="text-sm text-muted-foreground mt-1">Configure how the AI agent searches and evaluates job matches.</p>
       </div>
 
       {/* ── Resume Upload Section ── */}
@@ -54,7 +54,7 @@ export function PreferencesTab({
           icon={<Briefcase className="w-4.5 h-4.5" />}
           title="Resume Upload"
         >
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Upload your resume to auto-fill your profile and get AI-matched job recommendations.</p>
+          <p className="text-sm text-muted-foreground mb-4">Upload your resume to auto-fill your profile and get AI-matched job recommendations.</p>
 
           {/* Drop zone */}
           <div
@@ -93,19 +93,19 @@ export function PreferencesTab({
                   <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-white">{resumeFileName}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Parsed as {resumeProfile.targetTitle} · {resumeProfile.skills?.length || 0} skills detected</p>
+                  <p className="text-sm font-bold text-foreground">{resumeFileName}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Parsed as {resumeProfile.targetTitle} · {resumeProfile.skills?.length || 0} skills detected</p>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">Click or drag to replace</p>
+                <p className="text-xs text-muted-foreground mt-1">Click or drag to replace</p>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center">
                   <UploadCloud className="w-6 h-6 text-muted-foreground" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Drop your resume here or click to browse</p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">PDF files only · Max 10MB</p>
+                  <p className="text-xs text-muted-foreground dark:text-muted-foreground mt-1">PDF files only · Max 10MB</p>
                 </div>
               </div>
             )}
@@ -116,8 +116,8 @@ export function PreferencesTab({
             <div className="mt-4 bg-white/60 dark:bg-slate-800/40 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-white">{resumeProfile.name}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{resumeProfile.currentRole} · {resumeProfile.yearsExperience}+ years</p>
+                  <p className="text-sm font-bold text-foreground">{resumeProfile.name}</p>
+                  <p className="text-xs text-muted-foreground">{resumeProfile.currentRole} · {resumeProfile.yearsExperience}+ years</p>
                 </div>
                 <button
                   onClick={(e) => {
@@ -143,7 +143,7 @@ export function PreferencesTab({
                   </span>
                 ))}
                 {(resumeProfile.skills?.length || 0) > 12 && (
-                  <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold text-slate-400">+{resumeProfile.skills.length - 12} more</span>
+                  <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold text-muted-foreground">+{resumeProfile.skills.length - 12} more</span>
                 )}
               </div>
             </div>
@@ -159,7 +159,7 @@ export function PreferencesTab({
         >
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Target Job Title</label>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Target Job Title</label>
               <input
                 type="text"
                 value={prefs.targetTitle}
@@ -170,7 +170,7 @@ export function PreferencesTab({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Years of Experience</label>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Years of Experience</label>
                 <input
                   type="number"
                   min={0}
@@ -181,7 +181,7 @@ export function PreferencesTab({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Current Role</label>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Current Role</label>
                 <input
                   type="text"
                   value={prefs.currentRole}
@@ -220,8 +220,8 @@ export function PreferencesTab({
           <div className="space-y-4">
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Minimum Salary</label>
-                <span className="text-sm font-bold text-slate-800 dark:text-white">{prefs.currency} {prefs.minSalary.toLocaleString()}</span>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Minimum Salary</label>
+                <span className="text-sm font-bold text-foreground">{prefs.currency} {prefs.minSalary.toLocaleString()}</span>
               </div>
               <input
                 type="range"
@@ -240,7 +240,7 @@ export function PreferencesTab({
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Currency</label>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Currency</label>
               <select
                 value={prefs.currency}
                 onChange={(e) => updatePref("currency", e.target.value)}
@@ -261,7 +261,7 @@ export function PreferencesTab({
         >
           <div className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Must-have Skills</label>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Must-have Skills</label>
               <TagInput
                 tags={prefs.mustHaveSkills}
                 onChange={(v) => updatePref("mustHaveSkills", v)}
@@ -269,7 +269,7 @@ export function PreferencesTab({
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Nice-to-have Skills</label>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Nice-to-have Skills</label>
               <TagInput
                 tags={prefs.niceToHaveSkills}
                 onChange={(v) => updatePref("niceToHaveSkills", v)}
@@ -293,7 +293,7 @@ export function PreferencesTab({
                   className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl cursor-pointer transition-all duration-200 border ${
                     isChecked
                       ? "bg-blue-50 dark:bg-blue-500/10 border-blue-200/60 dark:border-blue-500/20 text-blue-700 dark:text-blue-300"
-                      : "bg-white/50 dark:bg-slate-800/30 border-slate-200/40 dark:border-slate-700/30 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600"
+                      : "bg-white/50 dark:bg-slate-800/30 border-slate-200/40 dark:border-slate-700/30 text-slate-600 dark:text-muted-foreground hover:border-slate-300 dark:hover:border-slate-600"
                   }`}
                 >
                   <input
@@ -338,7 +338,7 @@ export function PreferencesTab({
                   className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 border ${
                     isChecked
                       ? "bg-blue-50 dark:bg-blue-500/10 border-blue-200/60 dark:border-blue-500/20 text-blue-700 dark:text-blue-300"
-                      : "bg-white/50 dark:bg-slate-800/30 border-slate-200/40 dark:border-slate-700/30 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600"
+                      : "bg-white/50 dark:bg-slate-800/30 border-slate-200/40 dark:border-slate-700/30 text-muted-foreground hover:border-slate-300 dark:hover:border-slate-600"
                   }`}
                 >
                   {ind}
@@ -357,8 +357,8 @@ export function PreferencesTab({
             <Toggle checked={prefs.emailAlerts} onChange={(v) => updatePref("emailAlerts", v)} label="Email alerts for new matches" />
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Min Score Threshold</label>
-                <span className="text-sm font-bold text-slate-800 dark:text-white">{prefs.minScoreThreshold}%</span>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Min Score Threshold</label>
+                <span className="text-sm font-bold text-foreground">{prefs.minScoreThreshold}%</span>
               </div>
               <input
                 type="range"
@@ -369,7 +369,7 @@ export function PreferencesTab({
                 onChange={(e) => updatePref("minScoreThreshold", parseInt(e.target.value))}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-slate-200 dark:bg-slate-700 accent-blue-500"
               />
-              <div className="flex justify-between text-[10px] font-semibold text-slate-400 mt-1">
+              <div className="flex justify-between text-[10px] font-semibold text-muted-foreground mt-1">
                 <span>0%</span>
                 <span>50%</span>
                 <span>100%</span>
@@ -383,8 +383,8 @@ export function PreferencesTab({
       </div>
 
       {/* ── Save bar ── */}
-      <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/60 dark:bg-slate-900/50 backdrop-blur-2xl border border-white/60 dark:border-white/[0.06] rounded-2xl p-5 shadow-sm">
-        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+      <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 bg-card/40 backdrop-blur-2xl border border-border rounded-2xl p-5 shadow-sm">
+        <p className="text-sm text-muted-foreground font-medium">
           Preferences are saved locally and used when triggering scrapes.
         </p>
         <div className="flex gap-3">
@@ -394,7 +394,7 @@ export function PreferencesTab({
               setPrefs(DEFAULT_PREFERENCES);
               showToast("Reset to defaults", "info");
             }}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700/50 transition-all"
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-muted-foreground hover:text-slate-900 dark:hover:text-white bg-muted hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700/50 transition-all"
           >
             Reset
           </button>
