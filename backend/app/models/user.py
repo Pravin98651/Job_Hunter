@@ -44,5 +44,7 @@ class NotificationSettings(Base):
     email = Column(String(255), nullable=True)
     scrape_query = Column(String(255), default="AI Engineer")
     scrape_location = Column(String(255), default="Remote")
+    auto_apply_enabled = Column(Boolean, default=False)
+    auto_apply_threshold = Column(Integer, default=90)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

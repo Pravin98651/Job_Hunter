@@ -94,21 +94,21 @@ async def fill_heuristic_fields(page: Page, profile: dict):
             pass
 
 
-async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text: str | None = None, resume_bytes: bytes | None = None):
+async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text: str | None = None, resume_bytes: bytes | None = None, headless: bool = False) -> bool:
     """
-    Launches a visible (non-headless) chromium browser, navigates to apply_url, attempts heuristic 
-    filling, and waits for the user to close the browser manually.
+    Launches a chromium browser, navigates to apply_url, attempts heuristic 
+    filling. If headless is True, it will attempt to autonomously click Submit/Apply and return True/False based on success. If False, it waits for the user to close the browser manually.
     """
     if not apply_url or not apply_url.startswith("http"):
         logger.warning(f"[auto_apply] Invalid apply_url provided: {apply_url!r}")
-        return
+        return False
 
     # SSRF validation — prevent the browser from navigating to internal services
     try:
         _validate_apply_url(apply_url)
     except ValueError as e:
         logger.warning(f"[auto_apply] Blocked unsafe URL: {e}")
-        return
+        return False
 
     # Create temporary cover letter file if text is provided
     temp_cover_letter_path = None
@@ -145,7 +145,7 @@ async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text:
         
         context = await p.chromium.launch_persistent_context(
             user_data_dir=temp_user_data_dir,
-            headless=False,
+            headless=headless,
             args=args,
             viewport={"width": 1280, "height": 800},
             accept_downloads=False
@@ -186,14 +186,41 @@ async def run_auto_fill(apply_url: str, resume_profile: dict, cover_letter_text:
                 except Exception:
                     pass
 
-            # Wait for 5 minutes (300000 ms) instead of indefinitely
-            try:
-                await page.wait_for_event("close", timeout=300000)
-            except Exception:
-                logger.info("[auto_apply] Playwright session timed out or user closed the browser")
+            if headless:
+                # Autonomous mode: attempt to submit the application
+                try:
+                    submit_selectors = [
+                        "button[type='submit']",
+                        "input[type='submit']",
+                        "button:has-text('Submit')",
+                        "button:has-text('Apply')",
+                        "button:has-text('Next')"
+                    ]
+                    clicked = False
+                    for sel in submit_selectors:
+                        if clicked: break
+                        buttons = await page.locator(sel).all()
+                        for btn in buttons:
+                            if await btn.is_visible() and await btn.is_enabled():
+                                await btn.click()
+                                await page.wait_for_timeout(3000)
+                                clicked = True
+                                break
+                    return True
+                except Exception as e:
+                    logger.error(f"[auto_apply] Autonomous submission error: {e}")
+                    return False
+            else:
+                # Interactive mode: Wait for user to finish and close
+                try:
+                    await page.wait_for_event("close", timeout=300000)
+                except Exception:
+                    logger.info("[auto_apply] Playwright session timed out or user closed the browser")
+                return True
             
         except Exception as e:
             logger.error(f"[auto_apply] Playwright automation error: {e}", exc_info=True)
+            return False
         finally:
             await context.close()
 
