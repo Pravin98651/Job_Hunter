@@ -164,3 +164,22 @@ export interface CompanyBrief {
   interviewTips: string[];
   glassdoorSentiment: string;
 }
+
+export interface MockInterviewSession {
+  session_id: string;
+  job_title: string;
+  company: string;
+  overall_score: number | null;
+  summary: string | null;
+  qa_count: number;
+  created_at: string;
+}
+
+export interface MockInterviewQA {
+  id: string;
+  question: string;
+  user_answer: string;
+  feedback: string;
+  score: number;
+  created_at: string;
+}
